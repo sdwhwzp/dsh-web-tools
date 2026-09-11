@@ -825,3 +825,35 @@ test("XHS login: polling reuses the login tab instead of creating temporary veri
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 });
+
+test("stopping a pending manual login waits for its operation to finish", async () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dsh-stop-login-"));
+  let signalChecking!: () => void;
+  const checking = new Promise<void>((resolve) => { signalChecking = resolve; });
+  const fakeProc = createFakeProcessManager();
+  class SignedOutCdp extends FakeCdpClient {
+    override async send<T = unknown>(method: string, params = {}, sessionId?: string, signal?: AbortSignal): Promise<T> {
+      if (method === "Storage.getCookies") {
+        signalChecking();
+        return { cookies: [] } as T;
+      }
+      return super.send<T>(method, params, sessionId, signal);
+    }
+  }
+  const runtime = new SessionManager("auto", tmpDir, 0, fakeProc.launcher,
+    async () => new SignedOutCdp() as unknown as import("../src/host/browser/cdp/client.ts").CdpClient,
+    fakeProc.isPidAlive, fakeProc.killPid);
+  runtime.detect = async () => ({ kind: "chrome", executablePath: "/test/browser" });
+  const rejected = assert.rejects(runtime.login("x"), /aborted/i);
+  try {
+    await checking;
+    await runtime.stop("x");
+    await rejected;
+    assert.equal((await runtime.status("x")).loginPending, false);
+    assert.equal(fakeProc.activeProcesses.length, 0);
+  } finally {
+    await runtime.dispose();
+    await rejected;
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});

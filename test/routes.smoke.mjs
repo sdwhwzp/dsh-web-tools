@@ -79,6 +79,22 @@ async function call(method, payload, opts = {}) {
   return { status: res.statusCode, body: JSON.parse(res.body || "{}") };
 }
 
+test("platform/login rejects missing Host prerequisites instead of returning pending", async () => {
+  for (const reason of ["browser-missing", "display-missing"]) {
+    const { server, getHandler } = mockServer();
+    let started = false;
+    registerRoutes({ webServer: server, get: () => undefined }, { ...deps, nativeRuntime: {
+      status: async () => ({ runtimeAvailable: reason !== "browser-missing", loginUnavailableReason: reason }),
+      login: async () => { started = true; },
+    } });
+    const { req, res } = fakeReqRes("POST", `${API_PREFIX}/platform/login`, { platform: "x" });
+    await getHandler()(req, res);
+    assert.equal(res.statusCode, 409);
+    assert.equal(JSON.parse(res.body).error.code, reason);
+    assert.equal(started, false);
+  }
+});
+
 test("config/get returns providers with real pool size and no fake health", async () => {
   const { status, body } = await call("config/get");
   assert.equal(status, 200);

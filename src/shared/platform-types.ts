@@ -1,5 +1,8 @@
 export type BrowserPlatform = "xiaohongshu" | "x";
 
+/** Host prerequisites for opening an interactive platform login window. */
+export type LoginUnavailableReason = "browser-missing" | "display-missing";
+
 export interface PlatformAccountView {
   handle?: string;
   name?: string;
@@ -22,6 +25,8 @@ export interface BrowserPlatformStatusView {
   browserKind?: "edge" | "chrome";
   authenticated: boolean;
   sessionEstablished?: boolean;
+  loginPending?: boolean;
+  loginUnavailableReason?: LoginUnavailableReason;
   capabilities?: PlatformCapabilitiesView;
   account?: PlatformAccountView;
   lastError?: string;

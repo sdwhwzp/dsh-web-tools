@@ -145,6 +145,8 @@ export class XSource implements SpecializedSource {
         ? { handle: sessionStatus.accountLabel, name: sessionStatus.accountLabel }
         : undefined,
       lastError: sessionStatus.lastError,
+      loginPending: sessionStatus.loginPending,
+      loginUnavailableReason: sessionStatus.loginUnavailableReason,
       lastCheckedAt: sessionStatus.verifiedAt || Date.now(),
     };
   }

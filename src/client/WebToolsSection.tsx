@@ -25,6 +25,7 @@ import {
 } from "@deepseek-ai/dsh-client-ui-primitives";
 import { api, type ConfigView, type QuotaView, type TestProviderView, type TestSearchView, type ProviderView, type SearchRoutingPolicy, type VersionCheckView, type PlatformStatusResponse } from "./api.ts";
 import { arePlatformStatusesEqual, getPlatformPollIntervalMs } from "./platform-polling.ts";
+import { platformLoginMessage } from "./platform-login.ts";
 import { text, surface, state as stateColor, button as buttonColor } from "./theme.ts";
 import { ProviderModal } from "./ProviderModal.tsx";
 import { ExternalLinkIcon, PROVIDER_CAPABILITY_KEY } from "./provider-ui-meta.tsx";
@@ -421,6 +422,8 @@ export function WebToolsSection(props: SectionProps) {
   }, [config?.providerAttemptTimeoutMs]);
 
   const [platformState, setPlatformState] = useState<PlatformStatusResponse | null>(null);
+  const [loginStarting, setLoginStarting] = useState<Partial<Record<"xiaohongshu" | "x", boolean>>>({});
+  const [loginErrors, setLoginErrors] = useState<Partial<Record<"xiaohongshu" | "x", string>>>({});
   const platformStateRef = useRef<PlatformStatusResponse | null>(null);
   platformStateRef.current = platformState;
   const isFetchingPlatform = useRef(false);
@@ -532,11 +535,17 @@ export function WebToolsSection(props: SectionProps) {
 
   // Dedicated Browser Profile Login
   const loginPlatform = async (platform: "xiaohongshu" | "x") => {
+    setLoginStarting((current) => ({ ...current, [platform]: true }));
+    setLoginErrors((current) => ({ ...current, [platform]: undefined }));
     try {
       await api.platformLogin(platform);
       await loadPlatformStatus();
     } catch (err: any) {
-      setError(err instanceof Error ? err.message : String(err));
+      const message = err instanceof Error ? err.message : String(err);
+      setLoginErrors((current) => ({ ...current, [platform]: message === "browser-missing"
+        ? t("platformBrowserMissing") : message === "display-missing" ? t("platformDisplayMissing") : message }));
+    } finally {
+      setLoginStarting((current) => ({ ...current, [platform]: false }));
     }
   };
 
@@ -793,6 +802,7 @@ export function WebToolsSection(props: SectionProps) {
       {/* 平台搜索源 (Platform Sources) */}
       <section>
         <SettingsGroup title={t("platformSourcesTitle")}>
+          <p style={{ margin: "8px 0", color: text.secondary, fontSize: 12 }}>{t("platformLoginHostHint")}</p>
           {/* Xiaohongshu Row */}
           <SettingsRow
             icon={
@@ -804,11 +814,13 @@ export function WebToolsSection(props: SectionProps) {
             subtitle={
               (config.platformEnabled?.xiaohongshu ?? true) === false
                 ? t("platformDisabled")
-                : platformState?.platforms?.xiaohongshu?.authenticated
+                : loginErrors.xiaohongshu ?? platformState?.platforms?.xiaohongshu?.lastError ?? (platformLoginMessage(platformState?.platforms?.xiaohongshu, loginStarting.xiaohongshu)
+                  ? t(platformLoginMessage(platformState?.platforms?.xiaohongshu, loginStarting.xiaohongshu)!)
+                  : platformState?.platforms?.xiaohongshu?.authenticated
                   ? `${t("platformAccountPrefix")}${platformState.platforms.xiaohongshu.account?.name ?? t("platformConnected")}`
                   : platformState?.platforms?.xiaohongshu?.sessionEstablished
                     ? t("platformVerifying")
-                    : t("platformNotLoggedIn")
+                    : t("platformNotLoggedIn"))
             }
             trailing={
               <div style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
@@ -830,6 +842,7 @@ export function WebToolsSection(props: SectionProps) {
                     <Button
                       size="sm"
                       variant="outline"
+                      disabled={loginStarting.xiaohongshu || platformState?.platforms?.xiaohongshu?.loginPending}
                       onClick={() => void loginPlatform("xiaohongshu")}
                     >
                       {t("loginButton")}
@@ -856,11 +869,13 @@ export function WebToolsSection(props: SectionProps) {
             subtitle={
               (config.platformEnabled?.x ?? true) === false
                 ? t("platformDisabled")
-                : platformState?.platforms?.x?.authenticated
+                : loginErrors.x ?? platformState?.platforms?.x?.lastError ?? (platformLoginMessage(platformState?.platforms?.x, loginStarting.x)
+                  ? t(platformLoginMessage(platformState?.platforms?.x, loginStarting.x)!)
+                  : platformState?.platforms?.x?.authenticated
                   ? `${t("platformAccountPrefix")}${platformState.platforms.x.account?.handle ?? t("platformConnected")}`
                   : platformState?.platforms?.x?.sessionEstablished
                     ? t("platformVerifying")
-                    : t("platformNotLoggedIn")
+                    : t("platformNotLoggedIn"))
             }
             trailing={
               <div style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
@@ -882,6 +897,7 @@ export function WebToolsSection(props: SectionProps) {
                     <Button
                       size="sm"
                       variant="outline"
+                      disabled={loginStarting.x || platformState?.platforms?.x?.loginPending}
                       onClick={() => void loginPlatform("x")}
                     >
                       {t("loginButton")}

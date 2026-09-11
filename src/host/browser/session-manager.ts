@@ -3,6 +3,7 @@ import { fetchWebSocketDebuggerUrl } from "./cdp/connection.ts";
 import { CdpPage } from "./cdp/page.ts";
 import { UrlDisallowedError } from "./cdp/errors.ts";
 import { locateBrowser } from "./locator.ts";
+import { loginUnavailableReason } from "./login-environment.ts";
 import { validatePlatformUrl } from "./paths.ts";
 import { ProfileStore } from "./profile-store.ts";
 import { StateStore } from "./state-store.ts";
@@ -60,6 +61,9 @@ interface PlatformLifecycleRecord {
   idleTimer?: NodeJS.Timeout;
   queue: Promise<unknown>;
   pendingCancel?: boolean;
+  loginTask?: Promise<BrowserSessionStatus>;
+  loginAbort?: AbortController;
+  loginError?: string;
 }
 
 const PLATFORM_AUTH_CONFIG: Record<
@@ -233,6 +237,17 @@ export class SessionManager implements NativeBrowserRuntime {
   }
 
   async status(platform: BrowserPlatform): Promise<BrowserSessionStatus> {
+    const status = await this.sessionStatus(platform);
+    const rec = this.getRecord(platform);
+    return {
+      ...status,
+      loginPending: rec.loginTask !== undefined,
+      loginUnavailableReason: loginUnavailableReason(status.runtimeAvailable),
+      lastError: status.authenticated ? undefined : rec.loginError ?? status.lastError,
+    };
+  }
+
+  private async sessionStatus(platform: BrowserPlatform): Promise<BrowserSessionStatus> {
     const browser = await this.detect();
     if (!browser) {
       return {
@@ -345,6 +360,30 @@ export class SessionManager implements NativeBrowserRuntime {
   async login(
     platform: BrowserPlatform,
     signal?: AbortSignal,
+  ): Promise<BrowserSessionStatus> {
+    const rec = this.getRecord(platform);
+    if (rec.loginTask) return rec.loginTask;
+    rec.loginError = undefined;
+    const controller = new AbortController();
+    rec.loginAbort = controller;
+    const loginSignal = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal;
+    const task = this.runLogin(platform, loginSignal).then((result) => {
+      rec.loginError = result.lastError;
+      return result;
+    }, (error: unknown) => {
+      rec.loginError = error instanceof Error ? error.message : String(error);
+      throw error;
+    }).finally(() => {
+      rec.loginTask = undefined;
+      rec.loginAbort = undefined;
+    });
+    rec.loginTask = task;
+    return task;
+  }
+
+  private async runLogin(
+    platform: BrowserPlatform,
+    signal: AbortSignal,
   ): Promise<BrowserSessionStatus> {
     if (this.disposed) throw new Error("NativeBrowserRuntime is disposed");
     if (signal?.aborted) throw new Error("Login aborted");
@@ -774,15 +813,20 @@ export class SessionManager implements NativeBrowserRuntime {
   }
 
   async stop(platform: BrowserPlatform): Promise<void> {
-    return this.enqueue(platform, async () => {
-      const rec = this.getRecord(platform);
+    const rec = this.getRecord(platform);
+    const loginTask = rec.loginTask;
+    rec.loginAbort?.abort();
+    await this.enqueue(platform, async () => {
       await this.internalStop(rec);
     });
+    // Login failures are retained in status; stop waits for its lease to be released.
+    await loginTask?.catch(() => {});
   }
 
   async resetSession(platform: BrowserPlatform): Promise<void> {
     await this.stop(platform);
     this.profileStore.clearProfile(platform);
+    this.getRecord(platform).loginError = undefined;
   }
 
   async dispose(): Promise<void> {

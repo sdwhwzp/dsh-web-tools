@@ -47,6 +47,8 @@ export interface SourceStatus {
     | "error";
   authenticated: boolean;
   sessionEstablished?: boolean;
+  loginPending?: boolean;
+  loginUnavailableReason?: import("../../shared/platform-types.ts").LoginUnavailableReason;
   capabilities?: SourceCapabilities;
   account?: SourceAccountInfo;
   lastError?: string;

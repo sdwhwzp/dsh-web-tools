@@ -26,6 +26,8 @@ export function arePlatformStatusesEqual(
       pa.enabled !== pb.enabled ||
       pa.runtimeAvailable !== pb.runtimeAvailable ||
       pa.runtimeState !== pb.runtimeState ||
+      pa.loginPending !== pb.loginPending ||
+      pa.loginUnavailableReason !== pb.loginUnavailableReason ||
       pa.authenticated !== pb.authenticated ||
       pa.sessionEstablished !== pb.sessionEstablished ||
       pa.account?.handle !== pb.account?.handle ||
@@ -49,7 +51,7 @@ export function shouldPollPlatformStatus(
   const platforms = Object.values(currentStatus.platforms || {});
   // If any platform is starting, or has sessionEstablished without authentication (ongoing verify), poll frequently
   const isAnyPending = platforms.some(
-    (p) => p.runtimeState === "starting" || (p.sessionEstablished && !p.authenticated),
+    (p) => p.loginPending || p.runtimeState === "starting" || (p.sessionEstablished && !p.authenticated),
   );
   return isAnyPending;
 }
@@ -63,7 +65,7 @@ export function getPlatformPollIntervalMs(
 
   const platforms = Object.values(currentStatus.platforms || {});
   const isAnyPending = platforms.some(
-    (p) => p.runtimeState === "starting" || (p.sessionEstablished && !p.authenticated),
+    (p) => p.loginPending || p.runtimeState === "starting" || (p.sessionEstablished && !p.authenticated),
   );
   if (isAnyPending) return 2000;
 

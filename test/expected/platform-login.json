@@ -1,0 +1,7 @@
+[
+  { "name": "missing-browser", "message": { "zh": "服务端未安装受支持的浏览器，无法登录", "en": "No supported browser is installed on the Host" } },
+  { "name": "missing-display", "message": { "zh": "服务端没有可用的图形桌面，无法打开登录窗口", "en": "The Host has no graphical display for the login window" } },
+  { "name": "request-starting", "message": { "zh": "等待在服务端浏览器中完成登录…", "en": "Waiting for login in the Host browser…" } },
+  { "name": "awaiting-user", "message": { "zh": "等待在服务端浏览器中完成登录…", "en": "Waiting for login in the Host browser…" } },
+  { "name": "signed-out", "message": null }
+]

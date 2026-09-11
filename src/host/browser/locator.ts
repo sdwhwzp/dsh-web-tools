@@ -26,6 +26,8 @@ export function locateBrowser(
         { kind: "edge" as const, path: "/usr/bin/microsoft-edge" },
         { kind: "chrome" as const, path: "/usr/bin/google-chrome" },
         { kind: "chrome" as const, path: "/usr/bin/chromium-browser" },
+        { kind: "chrome" as const, path: "/usr/bin/chromium" },
+        { kind: "chrome" as const, path: "/snap/bin/chromium" },
       ];
       for (const c of candidates) {
         if ((choice === "auto" || choice === c.kind) && fsModule.existsSync(c.path)) {

@@ -27,7 +27,9 @@ export declare class SessionManager implements NativeBrowserRuntime {
     private internalCheckAuth;
     private hasRequiredCookies;
     status(platform: BrowserPlatform): Promise<BrowserSessionStatus>;
+    private sessionStatus;
     login(platform: BrowserPlatform, signal?: AbortSignal): Promise<BrowserSessionStatus>;
+    private runLogin;
     private prepareInteractiveLogin;
     openPage(platform: BrowserPlatform, url: string, signal?: AbortSignal, mode?: BrowserRunMode): Promise<CdpPageLease>;
     createPage(platform: BrowserPlatform, signal?: AbortSignal, mode?: BrowserRunMode): Promise<CdpPageLease>;

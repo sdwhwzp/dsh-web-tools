@@ -17,6 +17,9 @@ export interface BrowserSessionStatus {
     authenticated: boolean;
     /** Whether a dedicated profile session was previously established (non-secret metadata, unverified at cold start). */
     sessionEstablished?: boolean;
+    /** An interactive login is still awaiting user input or browser startup. */
+    loginPending?: boolean;
+    loginUnavailableReason?: import("../../shared/platform-types.ts").LoginUnavailableReason;
     accountLabel?: string;
     verifiedAt?: number;
     lastError?: string;

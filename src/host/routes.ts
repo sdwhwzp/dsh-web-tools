@@ -33,7 +33,7 @@ async function handlePlatformStatus(deps: RouteDeps): Promise<PlatformStatusResp
   // background runtime before returning status so the UI never asks the user
   // to manually validate an existing session.
   const needsVerification = statuses.filter(
-    (status) => status.sessionEstablished && !status.authenticated,
+    (status) => status.sessionEstablished && !status.authenticated && !status.loginPending,
   );
   if (needsVerification.length > 0) {
     const results = await Promise.allSettled(
@@ -68,6 +68,8 @@ async function handlePlatformStatus(deps: RouteDeps): Promise<PlatformStatusResp
       runtimeState: s.runtimeState,
       authenticated: s.authenticated,
       sessionEstablished: s.sessionEstablished,
+      loginPending: s.loginPending,
+      loginUnavailableReason: s.loginUnavailableReason,
       capabilities: s.capabilities,
       account: s.account,
       lastError: s.lastError,
@@ -80,12 +82,18 @@ async function handlePlatformStatus(deps: RouteDeps): Promise<PlatformStatusResp
 async function handlePlatformLogin(deps: RouteDeps, payload: unknown): Promise<{ status: string }> {
   const platform = (payload as any)?.platform as BrowserPlatform;
   if (platform === "xiaohongshu" || platform === "x") {
-    // Run login flow asynchronously, client polls status
+    const status = await deps.nativeRuntime.status(platform);
+    if (!status.runtimeAvailable || status.loginUnavailableReason) {
+      throw new PlatformLoginUnavailable(status.loginUnavailableReason ?? "browser-missing");
+    }
+    // SessionManager retains pending state and failures for the polling client.
     deps.nativeRuntime.login(platform).catch(() => {});
     return { status: "login-pending" };
   }
   return { status: "unknown_platform" };
 }
+
+class PlatformLoginUnavailable extends Error {}
 
 async function handlePlatformStop(deps: RouteDeps, payload: unknown): Promise<{ ok: boolean }> {
   const platform = (payload as any)?.platform as BrowserPlatform;
@@ -615,7 +623,11 @@ export function registerRoutes(ctx: WebToolsContext, deps: RouteDeps): () => voi
         }
         writeOk(res, await handler(deps, payload));
       } catch (e) {
-        writeError(res, 500, "internal", e instanceof Error ? e.message : String(e));
+        if (e instanceof PlatformLoginUnavailable) {
+          writeError(res, 409, e.message, e.message);
+        } else {
+          writeError(res, 500, "internal", e instanceof Error ? e.message : String(e));
+        }
       }
     },
   });

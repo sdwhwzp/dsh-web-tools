@@ -24,6 +24,8 @@ export interface SourceStatus {
     runtimeState: "unavailable" | "stopped" | "starting" | "ready" | "error";
     authenticated: boolean;
     sessionEstablished?: boolean;
+    loginPending?: boolean;
+    loginUnavailableReason?: import("../../shared/platform-types.ts").LoginUnavailableReason;
     capabilities?: SourceCapabilities;
     account?: SourceAccountInfo;
     lastError?: string;

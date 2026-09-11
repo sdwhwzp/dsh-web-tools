@@ -64,6 +64,8 @@ Free endpoints can change, require browser verification, return no results, or i
 
 ### Multi-account deployment
 
+Xiaohongshu and X login windows open on the computer running DSH. Remote Web access does not open a window on the visitor's computer; this version does not provide an in-page remote desktop. The Host needs Chrome/Chromium or Edge, and Linux needs a graphical display accessible to the service process. Platform settings show missing browser/display prerequisites, pending login, startup failures, and timeouts. Repeated clicks share one login operation.
+
 With a Harness `requestPrincipal` provider installed, `/web-tools/api` verifies every caller through that provider. Global provider settings, keys, quotas, search tests, and browser-login controls require an administrator. Ordinary accounts can read or change search mode only for sessions authorized by `principalAccess`; unavailable authentication or session authorization denies access. Standalone local installations retain the loopback and same-origin checks.
 
 Provider keys and signed-in X/Xiaohongshu browser profiles belong to the shared Host. In a multi-account production profile, disable X and Xiaohongshu through `platformEnabled: { x: false, xiaohongshu: false }` unless those signed-in sources are explicitly intended for all accounts. Public-platform searches and anonymous web providers remain available. Record the complete existing dependency pins and Cordis patch rows before installing this bundle; its `web` and `tool-web` rows replace the corresponding configuration objects.

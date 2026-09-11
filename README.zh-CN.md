@@ -8,7 +8,7 @@
 
 让 DeepSeek Harness 拥有直连全网与社媒平台的搜索与抓取能力。
 
-**8 大 Web Provider 原生能力适配 · SearchHints 语义编译 · 多源自动容灾 · 小红书 / Twitter X 平台检索**
+**15 大 Web Provider 原生能力适配 · SearchHints 语义编译 · 多源自动容灾 · 小红书 / Twitter X 平台检索**
 
 <p align="center">
   <a href="https://github.com/A3Boy/dsh-web-tools/stargazers">
@@ -27,11 +27,46 @@
 
 </div>
 
+## `dev` 分支：免费与 API 搜索融合版
+
+本分支将 [dsh-free-search](https://github.com/DDDMUC/dsh-free-search/tree/d1beabcf643256d95823a9cb8f06fc8f84a40483) 的搜索引擎和公开平台检索接入现有 dsh-web-tools，共用 Provider、密钥池、代理、设置页面及标准 `web_search` / `web_fetch` 工具。切换时请停用单独安装的 dsh-free-search，将本插件作为 Web Provider。已有搜索顺序和凭证继续保留，凭证统一由本插件的 Host 凭证服务管理。
+
+在 **设置 → Web 搜索** 中选择访问模式：
+
+| 模式 | 搜索顺序 | 网页正文提取 |
+| --- | --- | --- |
+| `free-only`（仅免费） | 匿名端点及明确配置的 SearXNG 实例；不发送已保存的 API Key | 内置 HTTP 提取；原有已登录 X / 小红书来源仍可使用 |
+| `free-first`（免费优先） | 先尝试匿名端点，再尝试已配置的 API 账号 | 原生提取及 HTTP 回退 |
+| `api-first`（API 优先，默认） | 先尝试已配置的 API 账号，再尝试匿名端点 | 原生提取及 HTTP 回退 |
+
+模式对已配置搜索顺序中的来源分组。Exa、Tavily、Keenable 各自支持匿名和账号两种访问方式，匿名失败与账号鉴权失败、冷却状态分别记录。Bing、DuckDuckGo HTML、DuckDuckGo Lite、AnySearch 不需要 Key；Perplexity Sonar 和 DeepSeek 官方联网搜索需要账号 Key。SearXNG 只使用明确填写的 Base URL 或实例列表，需要实例启用 JSON 输出，可配置每个实例的超时；整个 SearXNG 调用仍受 Provider 总尝试超时限制。
+
+建议从 `free-first` 开始，按需将 Bing、DuckDuckGo Lite、Exa、Tavily、AnySearch、Keenable 加入搜索顺序。新安装仍首选 Exa，默认回退顺序为 Bing → DuckDuckGo HTML → DuckDuckGo Lite → AnySearch → Tavily → Keenable；已有保存顺序不会自动添加来源。测试按钮检查当前模式允许的已启用通用搜索源；平台查询可在下方搜索测试中使用明确前缀检查。
+
+公开平台使用明确前缀，独立于通用 Provider 搜索顺序：
+
+| 查询示例 | 实际检索范围 |
+| --- | --- |
+| `GitHub: deepseek harness` | 仓库搜索，不包含需要鉴权的代码搜索 |
+| `V2EX: AI` | 筛选当前热门主题列表，不提供历史全站检索 |
+| `B站: DeepSeek` | Bilibili 视频搜索 |
+| `Reddit: typescript` | Reddit 公开帖子 |
+| `HN: agents` | 通过 Algolia 搜索 Hacker News，链接到讨论页 |
+| `StackOverflow: node fetch` | Stack Overflow 问题 |
+| `Wikipedia: 人工智能` | 中文或英文维基百科，可在设置中切换 |
+| `npm: cordis` | npm 软件包搜索 |
+
+每个平台均有独立开关。明确指定的平台被禁用或公开 API 不可用时，会返回错误，不用通用网页结果代替站内结果。普通主题词不会触发这些公开平台。X 与小红书沿用下文的浏览器登录流程。
+
+支持 `time:3d`、`time:12h`、`time:2mo`、`time:1y` 相对时间提示；明确的 `after:YYYY-MM-DD` 优先。日期精度为天，各引擎只应用自身支持的过滤条件。搜索结果使用插件实例独立的 LRU 缓存，默认 300 秒、50 条；缓存区分查询、来源、账号和生效配置。缓存时间设为 0 即关闭，空结果、失败和取消请求不写入缓存。
+
+免费端点可能调整、要求浏览器验证、返回空结果或受到共享限流，不保证持续可用。可运行 `npm run probe:search` 检查当前网络下的免 Key 来源；该命令不测试付费 API 账号、私有 SearXNG 实例或已登录的 X / 小红书会话。上游版本及验证记录见[实现说明](https://github.com/sdwhwzp/dsh-web-tools/blob/dev/.agents/notes/implemented/feature/2026-09-11-unified-free-web-search.md)，来源许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+
 ## 它解决什么问题
 
 当联网能力只依赖一个 Web Provider 时，额度耗尽、限流或服务异常都可能直接中断检索；而简单接入多个搜索 API，往往又只能使用它们共同支持的基础能力，没有真正发挥不同搜索源各自擅长的搜索模式、分类、时效、域名策略和正文提取能力。
 
-dsh-web-tools 将 Exa、Tavily、Firecrawl、Parallel、Brave、You.com、Jina、SearXNG，以及小红书、Twitter / X 接入 DSH 标准 `web_search` / `web_fetch`。
+dsh-web-tools 将 15 个通用搜索 Provider、8 个公开平台来源，以及小红书、Twitter / X 接入 DSH 标准 `web_search` / `web_fetch`。
 
 在统一 DSH 工具接口的同时，dsh-web-tools 通过 SearchHints 归一化查询意图，再针对不同 Provider 分别编译为其支持的原生参数，尽可能使用各家的分类、时效、域名、地区、深度搜索与正文提取能力；同时通过多 API Key、Provider Fallback 和平台专用浏览器会话，提高整个联网链路的可用性。
 
@@ -39,7 +74,7 @@ dsh-web-tools 将 Exa、Tavily、Firecrawl、Parallel、Brave、You.com、Jina�
 
 **核心亮点**：
 
-- **8 大 Web Provider 原生能力深度适配**：保持统一 `web_search` / `web_fetch` 接口，但不把不同搜索源压成最低公共能力。针对 Exa、Tavily、Firecrawl、Parallel、Brave、You.com、Jina、SearXNG 分别适配搜索类型、时效、域名策略、地区语言、深度检索与正文提取能力。
+- **15 大 Web Provider 原生能力深度适配**：保持统一 `web_search` / `web_fetch` 接口，但不把不同搜索源压成最低公共能力。针对 Exa、Tavily、Firecrawl、Parallel、Brave、You.com、Jina、SearXNG 分别适配搜索类型、时效、域名策略、地区语言、深度检索与正文提取能力。
 - **SearchHints → Provider-specific 参数编译**：将 Query 中的技术 / 论文 / 新闻、时效、域名、地区与语言等搜索意图归一化，再按不同 Provider 的能力映射为各自原生参数；整个过程由确定性代码完成，不增加额外 LLM 调用。
 - **小红书与 Twitter / X 平台来源**：两个平台均通过独立的本地浏览器 Profile 提供已登录站内搜索、详情抓取，以及页面实际返回的评论或回复。
 - **多搜索源调度与自动容灾**：支持多 API Key 分配、鉴权失败切换、429 冷却、Ordered / Round-Robin / Random 路由，以及可配置 Provider Fallback。
@@ -72,7 +107,7 @@ dsh-web-tools 将 Exa、Tavily、Firecrawl、Parallel、Brave、You.com、Jina�
   <img src="https://raw.githubusercontent.com/A3Boy/dsh-web-tools/main/assets/searchOrderAndRouting.png" width="900" alt="dsh-web-tools 搜索策略与多源调度" />
 </p>
 
-## 8 大 Web Provider 原生能力深度适配
+## 15 大 Web Provider 原生能力深度适配
 
 统一的是 DSH 的工具接口和搜索语义，不统一的是各家 Provider 的能力。
 
@@ -145,7 +180,7 @@ Agent 使用 `小红书:` 或 `X:` 作为平台路由前缀。前缀只负责选
 
 ```bash
 # 安装插件
-dsh plugin --profile web add github:A3Boy/dsh-web-tools
+dsh plugin --profile web add github:sdwhwzp/dsh-web-tools#dev
 
 # 更新插件
 dsh plugin --profile web update dsh-web-tools
@@ -171,6 +206,13 @@ dsh plugin --profile web remove dsh-web-tools
 | [You.com](https://you.com) | 支持 | 支持，`/v1/contents` | 搜索高亮片段提取、原生 **`boost_domains`** 软加权、时效与国家过滤、Markdown 正文接口 | 官方 API |
 | [Jina](https://jina.ai) | 支持 | 支持，Reader | 搜索关键词降噪、ReaderLM-v2 高精度 Markdown 转换、Token 预算控制 | 尽力解析 |
 | [SearXNG](https://docs.searxng.org) | 支持 | — | 开源自托管元搜索引擎，映射 `categories` (it/science/news) 与受支持的 `time_range`，适配器无需 API Key | 由自建实例决定 |
+| Bing | 支持 | — | 匿名 HTML 搜索，可选地区与安全搜索级别 | 公开端点限额 |
+| DuckDuckGo HTML | 支持 | — | 匿名 HTML 搜索，支持地区、安全搜索与日期预设 | 公开端点限额 |
+| DuckDuckGo Lite | 支持 | — | 匿名 Lite 搜索，可独立回退 | 公开端点限额 |
+| AnySearch | 支持 | — | 匿名 JSON 搜索 | 公开端点限额 |
+| Keenable | 支持 | — | 匿名 MCP 或带 Key 的 REST 搜索 | 由端点或账号决定 |
+| Perplexity | 支持 | — | Sonar 回答与引用，可配置模型及输出 Token 数 | 账号计费 |
+| DeepSeek 官方 | 支持 | — | 带引用的托管联网搜索，使用独立搜索凭证 | 账号计费 |
 
 ### 快速选型指南
 
@@ -190,11 +232,13 @@ dsh plugin --profile web remove dsh-web-tools
 
 ## 本地开发
 
+使用 Node.js 22.21.1 或受支持的更新版本。CI 使用已提交的 npm lockfile 检查 `main` 和 `dev` 分支。
+
 ```bash
-pnpm install          # 安装依赖
-pnpm test             # 运行测试套件
-pnpm run typecheck    # 类型检查
-pnpm run build        # 编译构建 (产物输出至 lib/)
+npm ci --include=optional # 安装依赖
+npm test              # 运行测试套件
+npm run typecheck    # 类型检查
+npm run build        # 编译构建 (产物输出至 lib/)
 
 ```
 

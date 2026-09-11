@@ -12,6 +12,7 @@ import type { WebToolsContext } from "./context-types.ts";
 import type { QuotaSnapshot } from "./quota.ts";
 import type { StoredProviderOptions } from "../shared/provider-options.ts";
 import type { SearchRoutingPolicy } from "../shared/api-types.ts";
+import type { SearchAccessMode } from "../shared/search-policy.ts";
 /** Persistent search routing policy id (shared with the client card). */
 export type ToolSearchRoutingPolicy = SearchRoutingPolicy;
 /** Settings namespace for this plugin. */
@@ -28,6 +29,10 @@ export declare const DEFAULT_PROVIDER = "exa";
  * never the dsh-private cosmokit copy.
  */
 export declare const DEFAULT_SETTINGS: {
+    searchAccessMode: SearchAccessMode;
+    cacheTtlSeconds: number;
+    cacheMaxEntries: number;
+    publicPlatformLanguage: "zh" | "en";
     enabled: boolean;
     defaultProvider: string;
     providerAttemptTimeoutMs: number;
@@ -41,6 +46,10 @@ export declare const DEFAULT_SETTINGS: {
 };
 /** Resolved settings shape (explicit interface — portable in emitted d.ts). */
 export interface WebToolsSettings {
+    searchAccessMode: SearchAccessMode;
+    cacheTtlSeconds: number;
+    cacheMaxEntries: number;
+    publicPlatformLanguage: "zh" | "en";
     enabled: boolean;
     defaultProvider: string;
     providerAttemptTimeoutMs: number;

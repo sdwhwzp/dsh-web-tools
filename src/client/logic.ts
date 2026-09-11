@@ -72,6 +72,7 @@ export type ProviderStatus =
   | "auth-error"
   | "unreachable"
   | "not-configured"
+  | "excluded-by-mode"
   | "disabled"
   | "not-in-order";
 
@@ -94,12 +95,14 @@ export function testOutcomeStatus(testResult?: { ok: boolean; error?: { code?: s
 export function providerStatusOf(p: ProviderView, quota?: QuotaView, inOrder = true): ProviderStatus {
   // Disabled providers are OFF regardless of credentials or order.
   if (p.enabled === false) return "disabled";
+  if (p.excludedByMode) return "excluded-by-mode";
   if (!inOrder) return "not-in-order";
   const selfHosted = p.name === "searxng";
   // Self-hosted providers (SearXNG) are configured by an explicit instance
   // base URL, NOT by an API key — the adapter default URL does not count.
-  const configured = selfHosted ? p.baseUrlConfigured === true : p.keyConfigured;
+  const configured = selfHosted ? p.baseUrlConfigured === true : p.authentication === "none" || p.authentication === "optional" || p.keyConfigured;
   if (!configured) return "not-configured";
+  if (p.accountSearchEnabled === false || (p.authentication === "optional" && !p.keyConfigured)) return "ready";
   const note = (quota?.note ?? "").toLowerCase();
   if (note.includes("auth") || note.includes("401") || note.includes("403") || note.includes("invalid key")) return "auth-error";
   // rate-limited only when the snapshot is meaningful: remaining 0 with a REAL
@@ -218,6 +221,7 @@ export function quotaMetaLine(t: TFunc, q: QuotaView | undefined): string {
 
 /** Human-readable attempt outcome (from Host `attempts[].outcome`). */
 export function outcomeLabel(t: TFunc, outcome: string): string {
+  if (outcome === "cached") return t("cachedOutcome");
   if (outcome === "success") return t("successOutcome");
   if (outcome.startsWith("failed:")) {
     const code = outcome.slice("failed:".length);
@@ -241,6 +245,7 @@ export function outcomeLabel(t: TFunc, outcome: string): string {
       case "skipped-no-healthy-keys": return t("skippedNoHealthyKeysOutcome");
       case "skipped-cooldown": return t("skippedCooldownOutcome");
       case "skipped-no-adapter": return t("skippedNoAdapterOutcome");
+      case "skipped-no-base-url": return t("notConfigured");
       default: return t("unknownOutcome");
     }
   }

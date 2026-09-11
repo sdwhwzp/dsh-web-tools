@@ -327,3 +327,12 @@ test("forbidden marketing copy audit: zhDict contains no banned terms", () => {
   }
 });
 
+
+test("free and optional-key sources are configured while paid-only sources reflect mode exclusion", () => {
+  for (const authentication of ["none", "optional"] as const) {
+    assert.equal(providerStatusOf(provider({ authentication })), "ready");
+  }
+  assert.equal(providerStatusOf(provider({ authentication: "required", keyConfigured: true, excludedByMode: true })), "excluded-by-mode");
+  assert.equal(outcomeLabel((key) => key, "cached"), "cachedOutcome");
+  assert.equal(providerStatusOf(provider({ authentication: "optional", keyConfigured: true, accountSearchEnabled: false }), { supported: true, authoritative: true, unit: "credits", source: "api", remaining: 0, limit: 100 }), "ready");
+});

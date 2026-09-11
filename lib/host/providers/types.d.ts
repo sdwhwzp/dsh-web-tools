@@ -38,6 +38,8 @@ export interface ProviderError extends Error {
 export declare function classifyHttpStatus(status: number): ProviderErrorCode;
 /** Adapter metadata (static). */
 export interface ProviderMeta {
+    /** Search authentication; omitted means required except for self-hosted search. */
+    authentication?: import("../../shared/search-policy.ts").SearchAuthentication;
     /** Stable id used in config/credentials/UI ("tavily"). */
     name: string;
     label: string;
@@ -100,6 +102,8 @@ export declare const extractContext: typeof resolveContext;
  * providers always require a key.
  */
 export declare function isKeylessSelfHosted(meta: Pick<ProviderMeta, "needsBaseUrl" | "fetchCapable">): boolean;
+/** Resolve the adapter's declared search authentication, including existing self-hosted adapters. */
+export declare function searchAuthentication(meta: Pick<ProviderMeta, "authentication" | "needsBaseUrl" | "fetchCapable">): import("../../shared/search-policy.ts").SearchAuthentication;
 /** Build a ProviderError with a classification code and optional retry-after metadata. */
 export declare function providerError(code: ProviderErrorCode, message: string, status?: number, retryAfterMs?: number): ProviderError;
 /**

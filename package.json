@@ -1,7 +1,7 @@
 {
   "name": "dsh-web-tools",
-  "version": "0.3.3",
-  "description": "Multi-provider Web Search & Fetch for DeepSeek Harness — 8 deeply adapted providers, SearchHints, resilient fallback, and native X / Xiaohongshu retrieval",
+  "version": "0.4.0-dev.1",
+  "description": "Unified free and API web search for DeepSeek Harness, with account-aware routing, platform search and page extraction",
   "author": "A3Boy",
   "license": "MIT",
   "type": "module",
@@ -24,7 +24,8 @@
     "README.md",
     "README.zh-CN.md",
     "LICENSE",
-    "CONTRIBUTING.md"
+    "CONTRIBUTING.md",
+    "THIRD_PARTY_NOTICES.md"
   ],
   "dsh": {
     "bundle": {
@@ -45,6 +46,7 @@
   "dependencies": {
     "defuddle": "^0.19.3",
     "linkedom": "^0.18.13",
+    "turndown": "^7.2.4",
     "undici": "^6.26.0",
     "ws": "^8.18.0"
   },
@@ -70,7 +72,8 @@
     "bundle": "tsdown",
     "test": "node --experimental-strip-types --test test/*.test.ts test/*.test.mjs test/*.smoke.mjs src/host/logic.test.ts",
     "smoke": "node --experimental-strip-types --test test/*.test.ts test/*.test.mjs test/*.smoke.mjs src/host/logic.test.ts",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "probe:search": "node --experimental-strip-types scripts/probe-search.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
@@ -78,5 +81,9 @@
     "@types/ws": "^8.5.14",
     "tsdown": "^0.22.14",
     "typescript": "^5.9.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sdwhwzp/dsh-web-tools.git"
   }
 }

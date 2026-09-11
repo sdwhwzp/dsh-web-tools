@@ -334,7 +334,7 @@ function ConnectionSettingsDisclosure(props: {
   const { t, p, draftBaseUrl, setDraftBaseUrl, onBaseUrl } = props;
   const selfHosted = p.name === "searxng";
   const [open, setOpen] = useState(selfHosted);
-  const isConfigured = !!p.baseUrl;
+  const isConfigured = p.baseUrlConfigured === true;
 
   return (
     <div style={{ display: "flex", flexDirection: "column" }}>
@@ -399,6 +399,7 @@ export function ProviderModal(props: Props) {
   const status = base === "ready" ? (testOutcomeStatus(testResult) ?? base) : base;
   const statusText = {
     ready: t("ready"), "rate-limited": t("rateLimited"), "auth-error": t("authError"),
+    "excluded-by-mode": t("excludedByMode"),
     "unreachable": t("unreachable"), "not-configured": t("notConfigured"), "disabled": t("disabled"), "not-in-order": t("notInOrder"),
   }[status];
   const statusState: "done" | "warning" | "error" | "ongoing" | "hollow" = status === "ready" ? "done" : status === "rate-limited" || status === "unreachable" ? "warning" : status === "auth-error" ? "error" : "hollow";
@@ -471,7 +472,7 @@ export function ProviderModal(props: Props) {
 
         {/* 账户: credentials + quota rows + connection settings */}
         <SettingsGroup title={t("accountTitle")} dividers="inset">
-          {!selfHosted && (
+          {!selfHosted && p.authentication !== "none" && (
             <CredentialDisclosure
               t={t}
               p={p}
@@ -482,7 +483,7 @@ export function ProviderModal(props: Props) {
               testResult={testResult}
             />
           )}
-          {!selfHosted && <QuotaCard quota={quota} providerName={p.name} t={t} onRefresh={onRefreshQuota} embedded />}
+          {!selfHosted && p.keyConfigured && p.accountSearchEnabled !== false && <QuotaCard quota={quota} providerName={p.name} t={t} onRefresh={onRefreshQuota} embedded />}
           {(selfHosted || p.baseUrl !== undefined) && (
             <ConnectionSettingsDisclosure
               t={t}
@@ -494,8 +495,55 @@ export function ProviderModal(props: Props) {
           )}
         </SettingsGroup>
 
+        {p.authentication !== "required" && p.authentication && (
+          <p style={{ color: text.secondary, fontSize: 13 }}>{t(p.authentication === "none" ? "keylessNotice" : "optionalKeyNotice")}</p>
+        )}
+        {["bing", "ddg", "ddg-lite", "perplexity", "deepseek-official"].includes(p.name) && (
+          <SettingsGroup title={t("searchSettingsTitle")}>
+            <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 12 }}>
+              {(["bing", "ddg", "ddg-lite"].includes(p.name) ? [p.name === "bing" ? "market" : "region", "safeSearch"] : ["model", "maxTokens"]).map((field) => (
+                <label key={`${p.name}:${field}`} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {t(`freeOption.${field}`)}
+                  {field === "safeSearch" ? (
+                    <select value={String(p.options?.effective?.[field] ?? "moderate")} onChange={(event) => {
+                      void api.providerOptionsSet(p.name, { ...p.options?.overrides, [field]: event.target.value }).then(onConfigChanged).catch((error) => setLocalError(String(error)));
+                    }}>
+                      {["off", "moderate", "strict"].map((value) => <option value={value} key={value}>{t(`safeSearch.${value}`)}</option>)}
+                    </select>
+                  ) : (
+                    <input key={String(p.options?.effective?.[field])} type={field === "maxTokens" ? "number" : "text"} defaultValue={String(p.options?.effective?.[field] ?? "")} onBlur={(event) => {
+                      const value = field === "maxTokens" ? Number(event.target.value) : event.target.value;
+                      if (value === p.options?.effective?.[field]) return;
+                      void api.providerOptionsSet(p.name, { ...p.options?.overrides, [field]: value }).then(onConfigChanged).catch((error) => setLocalError(String(error)));
+                    }} />
+                  )}
+                </label>
+              ))}
+            </div>
+          </SettingsGroup>
+        )}
+        {p.name === "searxng" && (
+          <SettingsGroup title={t("searxngInstances")}>
+            <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+              <label>{t("searxngInstancesHint")}
+                <textarea style={{ width: "100%", minHeight: 80 }} defaultValue={(p.options?.effective?.instances as string[] ?? []).join("\n")} onBlur={(event) => {
+                  const instances = event.target.value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+                  if (JSON.stringify(instances) === JSON.stringify(p.options?.effective?.instances ?? [])) return;
+                  void api.providerOptionsSet(p.name, { ...p.options?.overrides, instances }).then(onConfigChanged).catch((error) => setLocalError(String(error)));
+                }} />
+              </label>
+              <label>{t("searxngInstanceTimeout")}
+                <input type="number" min={1000} max={60000} defaultValue={Number(p.options?.effective?.instanceTimeoutMs ?? 3000)} onBlur={(event) => {
+                  const instanceTimeoutMs = Number(event.target.value);
+                  if (instanceTimeoutMs === p.options?.effective?.instanceTimeoutMs) return;
+                  void api.providerOptionsSet(p.name, { ...p.options?.overrides, instanceTimeoutMs }).then(onConfigChanged).catch((error) => setLocalError(String(error)));
+                }} />
+              </label>
+            </div>
+          </SettingsGroup>
+        )}
         {/* 搜索设置 / 网页读取: provider-native preferences */}
-        {p.options && p.name !== "searxng" && (
+        {p.options && ["exa", "tavily", "brave", "you", "firecrawl", "parallel", "jina"].includes(p.name) && (
           <SettingsGroup
             title={sectionTitle}
             dividers="none"

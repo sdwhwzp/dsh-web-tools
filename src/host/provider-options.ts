@@ -64,6 +64,49 @@ export function sanitizeProviderOptions(
   const out: Record<string, unknown> = {};
 
   switch (provider) {
+    case "searxng": {
+      if (raw.instances !== undefined) {
+        if (!Array.isArray(raw.instances) || raw.instances.length > 10) throw new Error("Invalid SearXNG instance list");
+        out.instances = [...new Set(raw.instances.map((value) => {
+          if (typeof value !== "string") throw new Error("Invalid SearXNG instance URL");
+          const url = new URL(value);
+          if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.search || url.hash) throw new Error("Invalid SearXNG instance URL");
+          return url.href.replace(/\/$/, "");
+        }))];
+      }
+      if (raw.instanceTimeoutMs !== undefined) {
+        if (typeof raw.instanceTimeoutMs !== "number" || !Number.isInteger(raw.instanceTimeoutMs) || raw.instanceTimeoutMs < 1000 || raw.instanceTimeoutMs > 60000) throw new Error("Invalid SearXNG instance timeout");
+        out.instanceTimeoutMs = raw.instanceTimeoutMs;
+      }
+      break;
+    }
+    case "bing":
+    case "ddg":
+    case "ddg-lite": {
+      for (const field of ["market", "region"] as const) {
+        if (raw[field] !== undefined) {
+          if (typeof raw[field] !== "string" || !/^[a-z]{2}-[a-z]{2}$/i.test(raw[field])) throw new Error(`Invalid ${field}`);
+          out[field] = raw[field];
+        }
+      }
+      if (raw.safeSearch !== undefined) {
+        if (typeof raw.safeSearch !== "string" || !["off", "moderate", "strict"].includes(raw.safeSearch)) throw new Error("Invalid safeSearch");
+        out.safeSearch = raw.safeSearch;
+      }
+      break;
+    }
+    case "perplexity":
+    case "deepseek-official": {
+      if (raw.model !== undefined) {
+        if (typeof raw.model !== "string" || !raw.model.trim() || raw.model.length > 100) throw new Error("Invalid search model");
+        out.model = raw.model.trim();
+      }
+      if (raw.maxTokens !== undefined) {
+        if (typeof raw.maxTokens !== "number" || !Number.isInteger(raw.maxTokens) || raw.maxTokens < 128 || raw.maxTokens > 16384) throw new Error("Invalid search token budget");
+        out.maxTokens = raw.maxTokens;
+      }
+      break;
+    }
     case "exa": {
       const validTypes = ["auto", "fast", "instant", "deep-lite", "deep", "deep-reasoning"];
       if (typeof raw.searchType === "string" && validTypes.includes(raw.searchType)) {
@@ -185,6 +228,20 @@ export function buildProviderOptionView(
 
   let effective: Record<string, unknown> = {};
   switch (provider) {
+    case "searxng":
+      effective = { instances: [], instanceTimeoutMs: 3000, ...cleanOverrides };
+      break;
+    case "bing":
+    case "ddg":
+    case "ddg-lite":
+      effective = { market: "zh-CN", region: "cn-zh", safeSearch: "moderate", ...cleanOverrides };
+      break;
+    case "perplexity":
+      effective = { model: "sonar", maxTokens: 1024, ...cleanOverrides };
+      break;
+    case "deepseek-official":
+      effective = { model: "deepseek-v4-flash", maxTokens: 4096, ...cleanOverrides };
+      break;
     case "exa":
       // maxAgeHours omitted by default (undefined = Exa default cache/livecrawl
       // policy); only included on the wire when the user overrides it.

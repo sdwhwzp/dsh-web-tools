@@ -13,6 +13,7 @@
  * keeps its existing comma-joined credential string contract.
  * @module
  */
+import { PUBLIC_PLATFORMS } from "../shared/search-policy.ts";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Button,
@@ -144,6 +145,7 @@ function ProviderRow(props: {
     "auth-error": t("authError"),
     "unreachable": t("unreachable"),
     "not-configured": t("notConfigured"),
+    "excluded-by-mode": t("excludedByMode"),
     "disabled": t("disabled"),
     "not-in-order": t("notInOrder"),
   }[status];
@@ -179,9 +181,9 @@ function ProviderRow(props: {
             {statusText}
           </span>
         </div>
-      ) : (
+      ) : p.keyConfigured && p.accountSearchEnabled !== false ? (
         <QuotaInline quota={quota} providerName={p.name} t={t} />
-      )}
+      ) : null}
       {editMode && inOrder && (
         <button
           type="button"
@@ -723,6 +725,45 @@ export function WebToolsSection(props: SectionProps) {
             }
             isLast
           />
+        </SettingsGroup>
+      </section>
+
+      <section>
+        <SettingsGroup title={t("searchAccessTitle")}>
+          <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 12 }}>
+            <SegmentedControl options={["free-only", "free-first", "api-first"].map((value) => ({ value, label: t(`searchAccess.${value}`) }))}
+              value={config.searchAccessMode ?? "api-first"} onChange={(value) => void save({ searchAccessMode: value })} />
+            <p style={{ margin: 0, fontSize: 12, color: text.secondary }}>{t(`searchAccessHint.${config.searchAccessMode ?? "api-first"}`)}</p>
+            <Button size="sm" variant="outline" disabled={Object.values(busyProviders).some(Boolean)} onClick={() => {
+              void (async () => {
+                for (const provider of config.providers.filter((p) => p.enabled && !p.excludedByMode)) await testProvider(provider.name);
+              })();
+            }}>{t("testAllSources")}</Button>
+            <label style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {t("cacheSeconds")}
+              <select value={config.cacheTtlSeconds ?? 300} onChange={(event) => void save({ cacheTtlSeconds: Number(event.target.value) })}>
+                {[0, 30, 60, 120, 300, config.cacheTtlSeconds ?? 300].filter((v, i, all) => all.indexOf(v) === i).sort((a, b) => a - b).map((value) => <option key={value} value={value}>{value === 0 ? t("cacheOff") : value}</option>)}
+              </select>
+            </label>
+          </div>
+        </SettingsGroup>
+      </section>
+      <section>
+        <SettingsGroup title={t("publicPlatformsTitle")}>
+          <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 12 }}>
+            <p style={{ margin: 0, fontSize: 12, color: text.secondary }}>{t("publicPlatformsHint")}</p>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>
+              {Object.entries(PUBLIC_PLATFORMS).map(([id, label]) => (
+                <div key={id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span>{label}</span>
+                  <Switch label={label} checked={config.platformEnabled?.[id] !== false} onChange={(enabled) => void save({ platformEnabled: { ...config.platformEnabled, [id]: enabled } })} />
+                </div>
+              ))}
+            </div>
+            <label>{t("wikipediaLanguage")} <select value={config.publicPlatformLanguage ?? "zh"} onChange={(event) => void save({ publicPlatformLanguage: event.target.value })}>
+              <option value="zh">{t("languageChinese")}</option><option value="en">{t("languageEnglish")}</option>
+            </select></label>
+          </div>
         </SettingsGroup>
       </section>
 

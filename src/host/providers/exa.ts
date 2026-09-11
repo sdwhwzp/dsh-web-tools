@@ -13,6 +13,7 @@ import { providerError, classifyHttpStatus, resolveContext, parseRetryAfter, typ
 import { fetchWithProxy } from "../fetch-proxy.ts";
 import type { ExaProviderOptions } from "../../shared/provider-options.ts";
 import type { SearchHints } from "../search-hints.ts";
+import { searchExaAnonymous } from "./free-search.ts";
 
 const EXA_SEARCH_URL = "https://api.exa.ai/search";
 const EXA_CONTENTS_URL = "https://api.exa.ai/contents";
@@ -139,6 +140,7 @@ async function throwExaError(res: Response): Promise<never> {
 }
 
 export const EXA_META = {
+  authentication: "optional",
   name: "exa",
   label: "Exa",
   description: "Semantic / neural web search (highlights & auto search)",
@@ -153,8 +155,8 @@ export const ExaProvider: ProviderAdapter = {
   async search(query, maxResults, apiKey, _baseUrl, contextOrSignal) {
     const { signal, options, hints } = resolveContext<ExaProviderOptions>(contextOrSignal);
     const token = (apiKey ?? "").trim();
-    if (!token) throw providerError("config", "Exa API key is not configured");
     const numResults = typeof maxResults === "number" && maxResults > 0 ? Math.min(maxResults, 25) : 10;
+    if (!token) return searchExaAnonymous(query, numResults, signal);
     const body = buildExaSearchBody(query, numResults, options, hints);
     const res = await fetchWithProxy(EXA_SEARCH_URL, {
       method: "POST",
@@ -223,4 +225,3 @@ export const ExaProvider: ProviderAdapter = {
     return { text };
   },
 };
-

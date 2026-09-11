@@ -10,6 +10,7 @@
  *
  * @module
  */
+import { searchAuthentication } from "./providers/types.ts";
 import type { WebToolsContext, WebToolsHttpRequest, WebToolsHttpResponse } from "./context-types.ts";
 import { poolSummary, type PoolEntry } from "./pool.ts";
 import { buildPool, hintOf } from "./pool.ts";
@@ -254,12 +255,15 @@ async function handleConfigGet(deps: RouteDeps): Promise<ConfigView> {
   for (const { meta, ref, cred } of credentialsSnapshots) {
     const pool = deps.poolEntries ? await deps.poolEntries(meta.name) : buildPool(cred.value ?? "");
     providers.push({
+      authentication: searchAuthentication(meta),
+      excludedByMode: cfg.searchAccessMode === "free-only" && searchAuthentication(meta) === "required",
+      accountSearchEnabled: cfg.searchAccessMode !== "free-only" && searchAuthentication(meta) !== "none",
       name: meta.name,
       label: meta.label,
       description: meta.description,
       enabled: enabledMap[meta.name] !== false,
       baseUrl: baseUrls[meta.name] ?? meta.defaultBaseUrl,
-      baseUrlConfigured: typeof baseUrls[meta.name] === "string" && baseUrls[meta.name].trim().length > 0,
+      baseUrlConfigured: (typeof baseUrls[meta.name] === "string" && baseUrls[meta.name].trim().length > 0) || (meta.name === "searxng" && Array.isArray(providerOpts.searxng?.instances) && providerOpts.searxng.instances.length > 0),
       credRef: ref,
       keyConfigured: cred.configured,
       keyWritable: cred.writable,
@@ -271,6 +275,10 @@ async function handleConfigGet(deps: RouteDeps): Promise<ConfigView> {
   }
 
   return {
+    searchAccessMode: (cfg.searchAccessMode as ConfigView["searchAccessMode"]) ?? "api-first",
+    cacheTtlSeconds: (cfg.cacheTtlSeconds as number) ?? 300,
+    cacheMaxEntries: (cfg.cacheMaxEntries as number) ?? 50,
+    publicPlatformLanguage: (cfg.publicPlatformLanguage as "zh" | "en") ?? "zh",
     enabled,
     defaultProvider,
     providerAttemptTimeoutMs: (cfg.providerAttemptTimeoutMs as number) ?? 10000,
@@ -285,6 +293,19 @@ async function handleConfigGet(deps: RouteDeps): Promise<ConfigView> {
 async function handleConfigSave(deps: RouteDeps, payload: unknown) {
   const p = (payload ?? {}) as Record<string, unknown>;
   const patch: Record<string, unknown> = {};
+  if (p.searchAccessMode !== undefined) {
+    if (typeof p.searchAccessMode !== "string" || !["free-only", "free-first", "api-first"].includes(p.searchAccessMode)) throw new Error("Invalid search access mode");
+    patch.searchAccessMode = p.searchAccessMode;
+  }
+  for (const [name, min, max] of [["cacheTtlSeconds", 0, 300], ["cacheMaxEntries", 1, 500]] as const) {
+    if (p[name] === undefined) continue;
+    if (typeof p[name] !== "number" || !Number.isInteger(p[name]) || p[name] < min || p[name] > max) throw new Error(`Invalid ${name}`);
+    patch[name] = p[name];
+  }
+  if (p.publicPlatformLanguage !== undefined) {
+    if (p.publicPlatformLanguage !== "zh" && p.publicPlatformLanguage !== "en") throw new Error("Invalid public platform language");
+    patch.publicPlatformLanguage = p.publicPlatformLanguage;
+  }
   if (typeof p.enabled === "boolean") patch.enabled = p.enabled;
   if (typeof p.defaultProvider === "string") patch.defaultProvider = p.defaultProvider;
   if (typeof p.providerAttemptTimeoutMs === "number") patch.providerAttemptTimeoutMs = p.providerAttemptTimeoutMs;
@@ -293,10 +314,17 @@ async function handleConfigSave(deps: RouteDeps, payload: unknown) {
   if (p.providerEnabled && typeof p.providerEnabled === "object") patch.providerEnabled = p.providerEnabled;
   if (p.platformEnabled && typeof p.platformEnabled === "object") {
     patch.platformEnabled = p.platformEnabled;
-    deps.sourceRegistry.setPlatformEnabled(p.platformEnabled as Record<string, boolean>);
   }
-  if (p.providerOptions && typeof p.providerOptions === "object") patch.providerOptions = p.providerOptions;
+  if (p.providerOptions !== undefined) {
+    if (!p.providerOptions || typeof p.providerOptions !== "object" || Array.isArray(p.providerOptions)) throw new Error("Invalid provider options");
+    patch.providerOptions = Object.fromEntries(Object.entries(p.providerOptions).map(([name, value]) => {
+      getProvider(name);
+      if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid provider options");
+      return [name, sanitizeProviderOptions(name, value as Record<string, unknown>)];
+    }));
+  }
   await deps.writeConfig(patch); // persist BEFORE reporting success
+  if (patch.platformEnabled) deps.sourceRegistry.setPlatformEnabled(patch.platformEnabled as Record<string, boolean>);
   return { saved: true };
 }
 

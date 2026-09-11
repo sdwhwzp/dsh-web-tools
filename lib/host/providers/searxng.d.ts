@@ -1,10 +1,7 @@
 /**
  * dsh-web-tools — SearXNG provider adapter (self-hosted, keyless option).
- * Queries the local instance's JSON output (GET {baseUrl}/search?format=json).
- * SSRF guard: refuses private/loopback targets unless the operator explicitly
- * opts in (self-hosted SearXNG on localhost is the normal case, so the guard
- * applies to the search TARGET, not the instance URL — the instance URL is
- * operator-configured and trusted by definition).
+ * Queries explicitly configured instance URLs in order, with a timeout per instance.
+ * Instance URLs are operator-owned; local instances are supported.
  * @module
  */
 import { type ProviderAdapter } from "./types.ts";

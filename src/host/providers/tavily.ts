@@ -92,6 +92,7 @@ export function buildTavilySearchBody(
 }
 
 export const TAVILY_META = {
+  authentication: "optional",
   name: "tavily",
   label: "Tavily",
   description: "AI-optimized web search (chunks & depth)",
@@ -150,13 +151,12 @@ export const TavilyProvider: ProviderAdapter = {
   async search(query, maxResults, apiKey, _baseUrl, contextOrSignal) {
     const { signal, options, hints } = resolveContext<TavilyProviderOptions>(contextOrSignal);
     const token = (apiKey ?? "").trim();
-    if (!token) throw providerError("config", "Tavily API key is not configured");
     const requestBody = buildTavilySearchBody(query, maxResults, options, hints);
     const res = await fetchWithProxy(TAVILY_SEARCH_URL, {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        authorization: `Bearer ${token}`,
+        ...(token ? { authorization: `Bearer ${token}` } : { "x-tavily-access-mode": "keyless" }),
       },
       body: JSON.stringify(requestBody),
       signal,

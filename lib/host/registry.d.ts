@@ -1,5 +1,6 @@
 import { type SearchRoutingPolicy } from "./routing-policy.ts";
 import { PoolEntry } from "./pool.ts";
+import type { SearchAccessMode, SearchAuthentication } from "../shared/search-policy.ts";
 import type { StoredProviderOptions } from "../shared/provider-options.ts";
 import type { ProviderHealthStore } from "./provider-health.ts";
 import { fetchGenericWebPage } from "./generic-fetch.ts";
@@ -57,6 +58,9 @@ export declare class WebToolsWebError extends Error {
 }
 /** Runtime configuration resolved per search (snapshot per operation). */
 export interface WebToolsRuntimeConfig {
+    searchAccessMode?: SearchAccessMode;
+    cacheTtlSeconds?: number;
+    cacheMaxEntries?: number;
     enabled: boolean;
     defaultProvider: string;
     /** Per-attempt budget for ONE provider call (the DSH tool owns the overall timeout). */
@@ -86,6 +90,7 @@ export declare function createPoolStore(resolveKeys: (providerName: string) => P
 export type PoolStore = ReturnType<typeof createPoolStore>;
 /** Structural subset of a provider adapter the executor needs (injectable). */
 export interface ProviderAdapterLike {
+    authentication?: SearchAuthentication;
     name: string;
     needsBaseUrl: boolean;
     fetchCapable: boolean;
@@ -127,3 +132,18 @@ export declare function createSearchProvider(resolveConfig: () => WebToolsRuntim
  * parsing) when native providers are unavailable, keyless, or fail.
  */
 export declare function createFetchProvider(resolveConfig: () => WebToolsRuntimeConfig, resolveKeys: (providerName: string) => Promise<string>, adapterRegistry?: Record<string, ProviderAdapterLike>, poolStore?: PoolStore, healthStore?: ProviderHealthStore, genericFetcher?: typeof fetchGenericWebPage): WebFetchProviderLike;
+/**
+ * Run a provider attempt with a real abort: the provider's fetch receives a
+ * signal that fires on EITHER the caller's cancellation OR this attempt's
+ * timeout, so a timeout genuinely aborts the in-flight HTTP request (no
+ * background request lingering / burning quota).
+ *
+ * Distinguishes the two cases:
+ *  - caller abort  → rejects with `aborted` (terminal; the chain stops)
+ *  - attempt timeout → rejects with `timeout` (retryable; fallback proceeds)
+ *
+ * @param run - the provider call; receives the merged abort signal.
+ * @param timeoutMs - per-attempt budget; <=0 disables the timer.
+ * @param externalSignal - the caller's AbortSignal (optional).
+ */
+export declare function runWithTimeout<T>(run: (signal: AbortSignal) => Promise<T>, timeoutMs: number, externalSignal?: AbortSignal): Promise<T>;

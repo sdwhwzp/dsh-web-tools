@@ -28,6 +28,7 @@ import type { SearchHints } from "../search-hints.ts";
  */
 export declare function buildTavilySearchBody(query: string, maxResults: number | undefined, options?: Readonly<TavilyProviderOptions>, hints?: Readonly<SearchHints>): Record<string, unknown>;
 export declare const TAVILY_META: {
+    readonly authentication: "optional";
     readonly name: "tavily";
     readonly label: "Tavily";
     readonly description: "AI-optimized web search (chunks & depth)";

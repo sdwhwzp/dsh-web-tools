@@ -1,15 +1,3 @@
-/**
- * dsh-web-tools — fenced HTTP routes for the settings card.
- *
- * The browser card talks to this Host plugin through its own `/web-tools/api`
- * prefix (following the proven `dsh-better-sidebar` pattern), which:
- *  - applies the same browser-trust fence as the /api gateway
- *  - never exposes credential values (reads return configured/writable state)
- *  - is the config-authority bridge for namespaces the settings RPC whitelist
- *    does not serve
- *
- * @module
- */
 import type { WebToolsContext } from "./context-types.ts";
 import { type PoolEntry } from "./pool.ts";
 import type { QuotaSnapshot } from "./quota.ts";

@@ -65,7 +65,32 @@ export interface JinaProviderOptions {
   fetchReaderLmV2?: boolean;
 }
 
+/** Locale and filtering preferences for public HTML search. */
+export interface FreeSearchOptions {
+  market?: string;
+  region?: string;
+  safeSearch?: "off" | "moderate" | "strict";
+}
+
+/** Model and response budget for citation-producing search APIs. */
+export interface AnswerSearchOptions {
+  model?: string;
+  maxTokens?: number;
+}
+
+/** Operator-selected SearXNG instances and the timeout for each instance. */
+export interface SearxngProviderOptions {
+  instances?: string[];
+  instanceTimeoutMs?: number;
+}
+
 export interface ProviderOptionsMap {
+  searxng: SearxngProviderOptions;
+  perplexity: AnswerSearchOptions;
+  "deepseek-official": AnswerSearchOptions;
+  bing: FreeSearchOptions;
+  ddg: FreeSearchOptions;
+  "ddg-lite": FreeSearchOptions;
   exa: ExaProviderOptions;
   tavily: TavilyProviderOptions;
   brave: BraveProviderOptions;

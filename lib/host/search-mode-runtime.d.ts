@@ -85,6 +85,8 @@ export declare class SearchModeRuntime {
 export interface SearchModeRuntimeDeps {
     /** True when a usable search provider exists (from the plugin's provider). */
     searchAvailable: () => boolean;
+    /** Logged search-source guidance for automatic mode, refreshed at the first step of each turn. */
+    guidance?: () => unknown;
 }
 /**
  * The UserMessages the runtime injects. Constructed with the OFFICIAL
@@ -123,6 +125,6 @@ export declare function searchModeStepMessage(state: TurnState | undefined, step
  * contribution is effect-scoped so stop/update/undefine removes it cleanly.
  * @param messages - pre-built official UserMessage factories ({ content, source }).
  */
-export declare function installSearchModeRuntime(ctx: WebToolsContext, _deps: SearchModeRuntimeDeps, runtime: SearchModeRuntime, messages: SearchModeMessages): () => void;
+export declare function installSearchModeRuntime(ctx: WebToolsContext, deps: SearchModeRuntimeDeps, runtime: SearchModeRuntime, messages: SearchModeMessages): () => void;
 /** Register the slash command, toggling the SAME mode. */
 export declare function registerSearchCommands(ctx: WebToolsContext, runtime: SearchModeRuntime): (() => void) | undefined;

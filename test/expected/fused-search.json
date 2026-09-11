@@ -1,0 +1,18 @@
+{
+  "general": [
+    {
+      "url": "https://example.com/docs",
+      "title": "Documentation",
+      "snippet": "Search snippet"
+    }
+  ],
+  "github": [
+    {
+      "url": "https://github.com/example/repo",
+      "title": "example/repo",
+      "snippet": "Repository result"
+    }
+  ],
+  "content": "Source: GitHub public search.",
+  "guidance": "Use web_search when web research is useful; use web_fetch to read a specific URL.\nTo search a specific enabled platform, prefix the query with one of: github:, v2ex:, bilibili:, reddit:, hn:, stackoverflow:, wikipedia:, npm:, X:, 小红书:. Otherwise use an ordinary web query.\nGitHub searches repositories. V2EX matches current hot topics only. Platform search results are discovery links, not fetched page details or comments.\nFor a date constraint, add after:YYYY-MM-DD, before:YYYY-MM-DD, or time:3d. Date-filter support varies by source; verify publication dates before claiming recency."
+}

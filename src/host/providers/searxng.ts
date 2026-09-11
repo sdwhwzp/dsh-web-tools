@@ -1,15 +1,13 @@
 /**
  * dsh-web-tools — SearXNG provider adapter (self-hosted, keyless option).
- * Queries the local instance's JSON output (GET {baseUrl}/search?format=json).
- * SSRF guard: refuses private/loopback targets unless the operator explicitly
- * opts in (self-hosted SearXNG on localhost is the normal case, so the guard
- * applies to the search TARGET, not the instance URL — the instance URL is
- * operator-configured and trusted by definition).
+ * Queries explicitly configured instance URLs in order, with a timeout per instance.
+ * Instance URLs are operator-owned; local instances are supported.
  * @module
  */
 import { providerError, resolveContext, type ProviderAdapter, type SearchOutcome } from "./types.ts";
-import { fetchWithProxy } from "../fetch-proxy.ts";
+import { normalizeSources, record, records, searchJson, string } from "./search-response.ts";
 import type { SearchHints } from "../search-hints.ts";
+import type { SearxngProviderOptions } from "../../shared/provider-options.ts";
 
 export const SEARXNG_META = {
   name: "searxng",
@@ -72,40 +70,36 @@ export const SearxngProvider: ProviderAdapter = {
   ...SEARXNG_META,
 
   async search(query, maxResults, apiKey, baseUrl, contextOrSignal) {
-    const { signal, hints } = resolveContext(contextOrSignal);
-    const instance = (baseUrl ?? SEARXNG_META.defaultBaseUrl).replace(/\/$/, "");
-    if (!instance) throw providerError("config", "SearXNG base URL is not configured");
-    const url = buildSearxngUrl(instance, query, apiKey, hints);
-    let res: Response;
-    try {
-      res = await fetchWithProxy(url, { signal });
-    } catch (e) {
-      throw providerError("network", `SearXNG unreachable at ${instance}: ${String(e)}`);
+    const { signal, hints, options } = resolveContext<SearxngProviderOptions>(contextOrSignal);
+    const instances = [...new Set([baseUrl, ...(options?.instances ?? [])].filter((url): url is string => !!url?.trim()))];
+    if (instances.length === 0) throw providerError("config", "SearXNG requires an explicitly configured instance");
+    let lastError: unknown;
+    for (const instance of instances) {
+      signal?.throwIfAborted();
+      const timeout = AbortSignal.timeout(options?.instanceTimeoutMs ?? 3000);
+      const attemptSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
+      try {
+        const outcome = await searchInstance(instance, query, maxResults, apiKey, hints, attemptSignal);
+        if (outcome.sources.length) return outcome;
+        lastError = providerError("invalid-response", "SearXNG instance returned no usable results");
+      } catch (error) {
+        if (signal?.aborted) throw providerError("aborted", "SearXNG search was cancelled");
+        lastError = timeout.aborted ? providerError("timeout", "SearXNG instance timed out") : error;
+      }
     }
-    if (!res.ok) {
-      if (res.status === 403) throw providerError("auth", "SearXNG refused the request (403) — enable JSON output in settings.yml", 403);
-      if (res.status >= 500) throw providerError("server", `SearXNG server error (HTTP ${res.status})`, res.status);
-      throw providerError("bad-request", `SearXNG request failed (HTTP ${res.status})`, res.status);
-    }
-    const raw = await res.json();
-    const results = Array.isArray(raw?.results) ? raw.results : [];
-    const sources = results
-      .slice(0, maxResults)
-      .map((r: Record<string, unknown>) => {
-        const u = typeof r?.url === "string" ? r.url : "";
-        if (!u) return null;
-        const s: { url: string; title?: string; snippet?: string } = { url: u };
-        if (typeof r.title === "string" && r.title) s.title = r.title;
-        if (typeof r.content === "string" && r.content) s.snippet = r.content;
-        return s;
-      })
-      .filter((x: { url: string } | null): x is { url: string } => x !== null);
-    const outcome: SearchOutcome = { sources };
-    if (typeof raw?.answer === "string" && raw.answer) outcome.content = raw.answer;
-    return outcome;
+    throw lastError;
   },
 
   async fetch(_url, _apiKey, _baseUrl, _signal) {
     throw providerError("config", "SearXNG does not provide native fetch; use the generic path");
   },
 };
+
+async function searchInstance(instanceUrl: string, query: string, maxResults: number, apiKey: string, hints: Readonly<SearchHints> | undefined, signal: AbortSignal): Promise<SearchOutcome> {
+  const url = buildSearxngUrl(instanceUrl, query, apiKey, hints);
+  const raw = record(await searchJson(url.href, { signal }));
+  const sources = normalizeSources(records(raw.results).map((result) => ({
+    url: string(result.url), title: string(result.title), snippet: string(result.content),
+  })), maxResults ?? 8);
+  return { sources, ...(typeof raw.answer === "string" && raw.answer ? { content: raw.answer } : {}) };
+}

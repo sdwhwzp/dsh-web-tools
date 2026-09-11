@@ -33,7 +33,7 @@ export declare function resolveUiLanguage(pref: UiLangPref | undefined, dshActiv
  */
 export declare function translateDict(dict: Record<string, string>, fallback: Record<string, string>, key: string, params?: Record<string, unknown>): string | undefined;
 /** Provider page status model (drives the row dot + detail Status block). */
-export type ProviderStatus = "ready" | "rate-limited" | "auth-error" | "unreachable" | "not-configured" | "disabled" | "not-in-order";
+export type ProviderStatus = "ready" | "rate-limited" | "auth-error" | "unreachable" | "not-configured" | "excluded-by-mode" | "disabled" | "not-in-order";
 /**
  * Status override from a connection-test result. A test that failed is NOT
  * automatically an auth error — `fetch failed` is usually a network problem.

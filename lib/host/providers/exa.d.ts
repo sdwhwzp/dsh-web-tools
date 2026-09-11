@@ -24,6 +24,7 @@ import type { SearchHints } from "../search-hints.ts";
  */
 export declare function buildExaSearchBody(query: string, numResults: number, options?: Readonly<ExaProviderOptions>, hints?: Readonly<SearchHints>): Record<string, unknown>;
 export declare const EXA_META: {
+    readonly authentication: "optional";
     readonly name: "exa";
     readonly label: "Exa";
     readonly description: "Semantic / neural web search (highlights & auto search)";

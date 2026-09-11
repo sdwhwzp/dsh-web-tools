@@ -61,6 +61,8 @@ export function classifyHttpStatus(status: number): ProviderErrorCode {
 
 /** Adapter metadata (static). */
 export interface ProviderMeta {
+  /** Search authentication; omitted means required except for self-hosted search. */
+  authentication?: import("../../shared/search-policy.ts").SearchAuthentication;
   /** Stable id used in config/credentials/UI ("tavily"). */
   name: string;
   label: string;
@@ -150,6 +152,11 @@ export const extractContext = resolveContext;
  */
 export function isKeylessSelfHosted(meta: Pick<ProviderMeta, "needsBaseUrl" | "fetchCapable">): boolean {
   return meta.needsBaseUrl && !meta.fetchCapable;
+}
+
+/** Resolve the adapter's declared search authentication, including existing self-hosted adapters. */
+export function searchAuthentication(meta: Pick<ProviderMeta, "authentication" | "needsBaseUrl" | "fetchCapable">): import("../../shared/search-policy.ts").SearchAuthentication {
+  return meta.authentication ?? (isKeylessSelfHosted(meta) ? "none" : "required");
 }
 
 /** Build a ProviderError with a classification code and optional retry-after metadata. */

@@ -336,3 +336,16 @@ test("search-mode/set toggles and persists, rejecting invalid modes", async () =
   assert.equal(invalid.status, 500);
   assert.equal(invalid.body.ok, false);
 });
+
+test("fusion settings persist valid values and reject invalid patches without writes", async (t) => {
+  const writes = [];
+  t.mock.method(deps, "writeConfig", async (patch) => { writes.push(patch); });
+  const patch = { searchAccessMode: "free-only", cacheTtlSeconds: 0, cacheMaxEntries: 1, publicPlatformLanguage: "en", providerOptions: { searxng: { instances: ["https://search.example.com/"] } } };
+  const valid = await call("config/save", patch);
+  assert.equal(valid.body.ok, true);
+  assert.deepEqual(writes[0], { ...patch, providerOptions: { searxng: { instances: ["https://search.example.com"] } } });
+  for (const invalid of [{ searchAccessMode: ["free-only"] }, { searchAccessMode: "free" }, { cacheTtlSeconds: -1 }, { cacheTtlSeconds: 301 }, { cacheMaxEntries: 0 }, { publicPlatformLanguage: "invalid" }, { providerOptions: [] }, { providerOptions: { searxng: { instances: ["file:///tmp"] } } }]) {
+    assert.equal((await call("config/save", invalid)).body.ok, false);
+  }
+  assert.equal(writes.length, 1);
+});

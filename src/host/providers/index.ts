@@ -10,6 +10,8 @@ import { ParallelProvider } from "./parallel.ts";
 import { SearxngProvider } from "./searxng.ts";
 import { TavilyProvider } from "./tavily.ts";
 import { YouProvider, youQuota } from "./you.ts";
+import { BingProvider, DdgProvider, DdgLiteProvider, AnysearchProvider, KeenableProvider } from "./free-search.ts";
+import { PerplexityProvider, DeepSeekOfficialProvider } from "./answer-search.ts";
 import type { QuotaProvider, QuotaSnapshot } from "../quota.ts";
 import { dashboardOnlyQuota, localUsageQuota, selfHostedQuota } from "../quota.ts";
 import { tavilyQuota } from "./tavily-quota.ts";
@@ -24,6 +26,13 @@ export interface ProviderWithQuota extends ProviderAdapter {
 
 /** All built-in adapters, keyed by name. */
 export const PROVIDERS: Record<string, ProviderWithQuota> = {
+  bing: BingProvider,
+  ddg: DdgProvider,
+  "ddg-lite": DdgLiteProvider,
+  anysearch: AnysearchProvider,
+  keenable: KeenableProvider,
+  perplexity: PerplexityProvider,
+  "deepseek-official": DeepSeekOfficialProvider,
   tavily: { ...TavilyProvider, quota: (key, _base, signal) => tavilyQuota(key, signal) },
   exa: ExaProvider,
   firecrawl: { ...FirecrawlProvider, quota: (key, _base, signal) => firecrawlQuota(key, signal) },
@@ -36,6 +45,13 @@ export const PROVIDERS: Record<string, ProviderWithQuota> = {
 
 /** Ordered adapter list for UI/fallback iteration. */
 export const PROVIDER_LIST: ProviderWithQuota[] = [
+  BingProvider,
+  DdgProvider,
+  DdgLiteProvider,
+  AnysearchProvider,
+  KeenableProvider,
+  PerplexityProvider,
+  DeepSeekOfficialProvider,
   TavilyProvider,
   ExaProvider,
   FirecrawlProvider,

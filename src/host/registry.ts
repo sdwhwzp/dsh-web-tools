@@ -12,8 +12,11 @@ import { classifyFailure, fallbackChain } from "./fallback.ts";
 import { resolveSearchChain, type SearchRoutingPolicy, type SearchRoutingState } from "./routing-policy.ts";
 import { buildPool, markUnhealthy, markUsed, reserveKey, releaseKey, selectIndex, PoolEntry } from "./pool.ts";
 import { PROVIDERS } from "./providers/index.ts";
-import type { ProviderError, ProviderErrorCode } from "./providers/types.ts";
-import { isKeylessSelfHosted } from "./providers/types.ts";
+import { searchAuthentication, type ProviderError, type ProviderErrorCode } from "./providers/types.ts";
+import type { SearchAccessMode, SearchAuthentication } from "../shared/search-policy.ts";
+import { searchAttempts } from "./search-access.ts";
+import { SearchCache, searchCacheKey } from "./search-cache.ts";
+import { filterSourceDomains } from "./providers/free-search.ts";
 import type { StoredProviderOptions } from "../shared/provider-options.ts";
 import { extractSearchHints } from "./search-hints.ts";
 import type { ProviderHealthStore } from "./provider-health.ts";
@@ -60,6 +63,9 @@ export class WebToolsWebError extends Error {
 
 /** Runtime configuration resolved per search (snapshot per operation). */
 export interface WebToolsRuntimeConfig {
+  searchAccessMode?: SearchAccessMode;
+  cacheTtlSeconds?: number;
+  cacheMaxEntries?: number;
   enabled: boolean;
   defaultProvider: string;
   /** Per-attempt budget for ONE provider call (the DSH tool owns the overall timeout). */
@@ -121,6 +127,7 @@ export type PoolStore = ReturnType<typeof createPoolStore>;
 
 /** Structural subset of a provider adapter the executor needs (injectable). */
 export interface ProviderAdapterLike {
+  authentication?: SearchAuthentication;
   name: string;
   needsBaseUrl: boolean;
   fetchCapable: boolean;
@@ -143,6 +150,7 @@ export function createSearchProvider(
 ): WebSearchProviderLike {
   const pools = poolStore ?? createPoolStore(resolveKeys);
   const routingState: SearchRoutingState = { nextRoundRobinIndex: 0 };
+  const cache = new SearchCache();
 
   return {
     id: PROVIDER_ID,
@@ -168,7 +176,8 @@ export function createSearchProvider(
       );
       return chain.some((name) => {
         if (cfg.enabledProviders[name] === false) return false;
-        return adapterRegistry[name] !== undefined;
+        const adapter = adapterRegistry[name];
+        return adapter !== undefined && (cfg.searchAccessMode !== "free-only" || searchAuthentication(adapter) !== "required");
       });
     },
 
@@ -191,23 +200,30 @@ export function createSearchProvider(
       const attempts: Array<{ provider: string; outcome: string; latencyMs?: number }> = [];
       let lastError: ProviderError | undefined;
       const searchHints = extractSearchHints(request.query);
+      const providerQuery = request.query.replace(/(?:^|\s)time:\d+(h|d|mo|y)\b/gi, () =>
+        /(?:^|\s)after:/i.test(request.query) ? " " : ` after:${searchHints.freshness?.after ?? ""}`,
+      ).trim();
 
-      for (const providerName of chain) {
+      const scheduled = searchAttempts(chain, cfg.searchAccessMode ?? "api-first", adapterRegistry);
+      for (const attempt of scheduled) {
+        const providerName = attempt.provider;
+        if (signal?.aborted) throw toWebError(providerErrorOf("aborted", "web search aborted by caller"));
         if (cfg.enabledProviders[providerName] === false) continue;
         const adapter = adapterRegistry[providerName];
         if (!adapter) {
           attempts.push({ provider: providerName, outcome: "skipped-no-adapter" });
           continue;
         }
-        let entries = await pools.poolOf(providerName);
-        const keyless = isKeylessSelfHosted(adapter);
-        if (entries.length === 0 && keyless) {
-          // Self-hosted keyless providers (SearXNG) execute with an empty key
-          entries = [new PoolEntry("", 0)];
-        } else if (entries.length === 0) {
+        if (adapter.needsBaseUrl && !cfg.providerBaseUrls[providerName]?.trim() && !(providerName === "searxng" && cfg.providerOptions?.searxng?.instances?.length)) {
+          attempts.push({ provider: providerName, outcome: "skipped-no-base-url" });
+          continue;
+        }
+        const entries = attempt.anonymous ? [new PoolEntry("", 0)] : await pools.poolOf(providerName);
+        if (entries.length === 0) {
           attempts.push({ provider: providerName, outcome: "skipped-no-keys" });
           continue;
         }
+        const healthId = attempt.anonymous ? `${providerName}:anonymous` : providerName;
 
         // Auth-invalid keys stay unhealthy until the credential actually
         // changes (refreshPool preserves healthy=false for persisted keys).
@@ -220,7 +236,7 @@ export function createSearchProvider(
 
         // Provider-level cooldown (Retry-After). The store uses its own clock
         // (injectable for tests) — zero HTTP when cooling down.
-        if (healthStore?.isCoolingDown(providerName)) {
+        if (healthStore?.isCoolingDown(healthId)) {
           attempts.push({ provider: providerName, outcome: "skipped-cooldown" });
           continue;
         }
@@ -236,10 +252,16 @@ export function createSearchProvider(
           if (entry) reserveKey(entries, index);
           const started = Date.now();
           const providerOptions = cfg.providerOptions?.[providerName as keyof StoredProviderOptions];
+          const cacheKey = searchCacheKey({ providerName, key: entry?.key, request, config: cfg, hints: searchHints });
           try {
+            const cached = cache.get(cacheKey, cfg.cacheTtlSeconds ?? 0);
+            if (cached) {
+              attempts.push({ provider: providerName, outcome: "cached", latencyMs: 0 });
+              return { ...cached, truncated: false, attempts, backend: providerName, cached: true };
+            }
             const outcome = await runWithTimeout(
               (s) =>
-                adapter.search(request.query, maxResults, entry?.key ?? "", cfg.providerBaseUrls[providerName], {
+                adapter.search(providerQuery, maxResults, entry?.key ?? "", cfg.providerBaseUrls[providerName], {
                   signal: s,
                   options: providerOptions,
                   hints: searchHints,
@@ -247,6 +269,11 @@ export function createSearchProvider(
               cfg.providerAttemptTimeoutMs,
               signal,
             );
+            outcome.sources = filterSourceDomains(outcome.sources, searchHints);
+            if (!outcome.sources.length) {
+              throw providerErrorOf("invalid-response", `${providerName} returned no usable results`);
+            }
+            cache.set(cacheKey, outcome, cfg.cacheTtlSeconds ?? 0, cfg.cacheMaxEntries ?? 50);
             if (entry) markUsed(entries, index);
             const latencyMs = Date.now() - started;
             attempts.push({ provider: providerName, outcome: "success", latencyMs });
@@ -289,7 +316,7 @@ export function createSearchProvider(
             lastError = err;
             // Only rate-limit errors carry a server-requested cooldown.
             if (err.code === "rate-limit" && typeof err.retryAfterMs === "number" && err.retryAfterMs > 0) {
-              healthStore?.cooldownFor(providerName, err.retryAfterMs, "rate-limit");
+              healthStore?.cooldownFor(healthId, err.retryAfterMs, "rate-limit");
             }
             attempts.push({ provider: providerName, outcome: `failed:${err.code}`, latencyMs });
             stats.record({ provider: providerName, outcome: `failed:${err.code}`, latencyMs });
@@ -341,6 +368,7 @@ export function createFetchProvider(
     },
     async fetch(request: { url: string }, signal?: AbortSignal) {
       const cfg = resolveConfig();
+      if (!cfg.enabled) throw new WebToolsWebError("web fetch is disabled");
       const chain = fallbackChain({
         defaultProvider: cfg.defaultProvider,
         fallbackOrder: cfg.fallbackOrder,
@@ -353,7 +381,7 @@ export function createFetchProvider(
       for (const providerName of chain) {
         if (cfg.enabledProviders[providerName] === false) continue;
         const adapter = adapterRegistry[providerName];
-        if (!adapter || !adapter.fetchCapable) continue; // not a native fetch backend, skip
+        if (!adapter || !adapter.fetchCapable || cfg.searchAccessMode === "free-only") continue; // not a native fetch backend, skip
         const entries = await pools.poolOf(providerName);
         if (entries.length === 0) continue; // no credentials for this backend
         const usable = entries.filter((e) => e.healthy);
@@ -488,7 +516,7 @@ function toWebError(error: unknown): WebToolsWebError {
  * @param timeoutMs - per-attempt budget; <=0 disables the timer.
  * @param externalSignal - the caller's AbortSignal (optional).
  */
-async function runWithTimeout<T>(
+export async function runWithTimeout<T>(
   run: (signal: AbortSignal) => Promise<T>,
   timeoutMs: number,
   externalSignal?: AbortSignal,

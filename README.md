@@ -8,7 +8,7 @@
 
 Empower DeepSeek Harness with unified search and deep content extraction across the open web and social platforms.
 
-**Native-Capability Adaptation Across 8 Web Providers · SearchHints Semantic Compilation · Multi-Source Resilience · Xiaohongshu & Twitter / X Retrieval**
+**Native-Capability Adaptation Across 15 Web Providers · SearchHints Semantic Compilation · Multi-Source Resilience · Xiaohongshu & Twitter / X Retrieval**
 
 <p align="center">
   <a href="https://github.com/A3Boy/dsh-web-tools/stargazers">
@@ -27,11 +27,46 @@ Empower DeepSeek Harness with unified search and deep content extraction across 
 
 </div>
 
+## Unified free and API search on `dev`
+
+This fork integrates the search engines and public-platform retrieval from [dsh-free-search](https://github.com/DDDMUC/dsh-free-search/tree/d1beabcf643256d95823a9cb8f06fc8f84a40483) into the existing dsh-web-tools provider, key pool, proxy, settings page, and standard `web_search` / `web_fetch` tools. Use this plugin as the web provider; disable a separately installed dsh-free-search before switching. Existing saved provider order and credentials remain in place; credentials are managed only through this plugin's host credential service.
+
+In **Settings → Web Search**, choose an access mode:
+
+| Mode | Search order | Page extraction |
+| --- | --- | --- |
+| `free-only` | Anonymous endpoints and explicitly configured SearXNG instances; never sends stored API keys | Built-in HTTP extraction; existing signed-in X/Xiaohongshu sources remain available |
+| `free-first` | Anonymous attempts first, then configured API accounts | Existing native extraction and HTTP fallback |
+| `api-first` (default) | Configured API accounts first, then anonymous attempts | Existing native extraction and HTTP fallback |
+
+The selected mode groups the providers in your configured search order. Exa, Tavily, and Keenable each support anonymous and account attempts; account authentication failures and cooldowns are separate from anonymous failures. Bing, DuckDuckGo HTML, DuckDuckGo Lite, and AnySearch need no key. Perplexity Sonar and DeepSeek official web search require an account key. SearXNG uses only your explicit Base URL or instance list; configure JSON output and the timeout per instance. The overall provider-attempt timeout still limits the complete SearXNG attempt.
+
+Start with `free-first` and add Bing, DuckDuckGo Lite, Exa, Tavily, AnySearch, and Keenable to the order as needed. The new-install fallback order is Bing → DuckDuckGo HTML → DuckDuckGo Lite → AnySearch → Tavily → Keenable, with Exa as the preferred provider. The mode does not silently add sources to an existing saved order. The test button checks enabled general providers allowed by the selected mode; explicit platform queries can be checked with the search test below.
+
+Public searches use explicit prefixes, independently of the general provider order:
+
+| Query example | Retrieval scope |
+| --- | --- |
+| `GitHub: deepseek harness` | Repository search, not authenticated code search |
+| `V2EX: AI` | Filter the current hot-topic list, not historical full-site search |
+| `B站: DeepSeek` | Bilibili video search |
+| `Reddit: typescript` | Public Reddit posts |
+| `HN: agents` | Hacker News search via Algolia, linking to discussions |
+| `StackOverflow: node fetch` | Stack Overflow questions |
+| `Wikipedia: 人工智能` | Chinese or English Wikipedia, selected in settings |
+| `npm: cordis` | npm package search |
+
+Each public platform has its own switch. A disabled platform or unavailable public API returns an explicit error; general web results are not substituted for native platform results. Ordinary topic words do not trigger these public sources. X and Xiaohongshu retain the existing browser-session workflow described below.
+
+`time:3d`, `time:12h`, `time:2mo`, and `time:1y` become date hints; explicit `after:YYYY-MM-DD` takes precedence. Date precision is one day, and each engine applies only supported filters. Search results have a per-plugin-instance LRU cache (default 300 seconds, 50 entries); cache identity includes query, source, account, and effective settings. Set the cache to 0 to disable it. Empty responses, failures, and cancelled requests are not cached.
+
+Free endpoints can change, require browser verification, return no results, or impose shared limits. They do not provide guaranteed availability. Run `npm run probe:search` for a keyless network check in your environment. This does not test paid API accounts, a private SearXNG instance, or signed-in X/Xiaohongshu sessions. The fusion source revisions and verification are recorded in [the implementation note](https://github.com/sdwhwzp/dsh-web-tools/blob/dev/.agents/notes/implemented/feature/2026-09-11-unified-free-web-search.md); upstream license notices are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
 ## What problem does it solve?
 
 When web access depends on a single provider, exhausted quota, rate limits, or timeouts can interrupt retrieval. Wrapping multiple APIs with a naive proxy often flattens them to a lowest common denominator, failing to leverage each provider's specialized search modes, categories, freshness, domain rules, and extraction capabilities.
 
-dsh-web-tools connects Exa, Tavily, Firecrawl, Parallel, Brave, You.com, Jina, SearXNG, Xiaohongshu, and Twitter / X to DSH’s standard `web_search` / `web_fetch` interface.
+dsh-web-tools connects 15 general search providers, eight public-platform sources, Xiaohongshu, and Twitter / X to DSH’s standard `web_search` / `web_fetch` interface.
 
 While keeping the tool interface unified, dsh-web-tools normalizes search intents through SearchHints and compiles queries into native provider-specific parameters. This leverages each engine's native categories, freshness filters, domain policies, regional targeting, and content extraction, while maximizing uptime through multi-key allocation, automated failover, and dedicated browser profiles.
 
@@ -39,7 +74,7 @@ While keeping the tool interface unified, dsh-web-tools normalizes search intent
 
 **Key Highlights**:
 
-- **Native-Capability Adaptation Across 8 Web Providers**: Keeps the standard `web_search` / `web_fetch` contracts while compiling unified search intent into provider-specific native parameters instead of reducing every backend to the same lowest-common-denominator feature set.
+- **Native-Capability Adaptation Across 15 Web Providers**: Keeps the standard `web_search` / `web_fetch` contracts while compiling unified search intent into provider-specific native parameters instead of reducing every backend to the same lowest-common-denominator feature set.
 - **SearchHints → Provider-Specific Parameter Compilation**: Normalizes technical, research, news, date, region, and domain constraints from queries, compiling them into provider-native parameters through deterministic code without additional LLM latency.
 - **Xiaohongshu & Twitter / X Platform Sources**: Both platforms support signed-in native search, detail extraction, and returned comments or replies through dedicated local browser profiles.
 - **Multi-Source Scheduling & Resilience**: Features multi-API-key pooling, 401 failover, 429 cooldown windows, configurable Ordered / Round-Robin / Random routing, and failover chains.
@@ -72,7 +107,7 @@ While keeping the tool interface unified, dsh-web-tools normalizes search intent
   <img src="https://raw.githubusercontent.com/A3Boy/dsh-web-tools/main/assets/searchOrderAndRouting.png" width="900" alt="dsh-web-tools search strategy and multi-provider routing" />
 </p>
 
-## Native-Capability Adaptation Across 8 Web Providers
+## Native-Capability Adaptation Across 15 Web Providers
 
 The tool interface and search semantics are unified for the DSH agent, but underlying provider capabilities are not.
 
@@ -145,7 +180,7 @@ Agents use `小红书:` or `X:` as a platform-routing prefix. The prefix selects
 
 ```bash
 # Install
-dsh plugin --profile web add github:A3Boy/dsh-web-tools
+dsh plugin --profile web add github:sdwhwzp/dsh-web-tools#dev
 
 # Update
 dsh plugin --profile web update dsh-web-tools
@@ -171,6 +206,13 @@ Restart `dsh web` and navigate to `Settings` → `Web Search`.
 | [You.com](https://you.com) | Yes | Yes, `/v1/contents` | Snippet highlights, native **`boost_domains`** soft-weighting, freshness and country/lang filters, markdown endpoint | Official API |
 | [Jina](https://jina.ai) | Yes | Yes, Reader | Search query noise filtering, ReaderLM-v2 high-precision markdown, token budget and truncation control | Best-effort |
 | [SearXNG](https://docs.searxng.org) | Yes | — | Open-source self-hosted metasearch with `categories` and supported `time_range` values; the adapter requires no API key | Instance-defined |
+| Bing | Yes | — | Anonymous HTML search, market and safe-search settings | Public endpoint limits |
+| DuckDuckGo HTML | Yes | — | Anonymous HTML search, region, safe search and supported date presets | Public endpoint limits |
+| DuckDuckGo Lite | Yes | — | Anonymous Lite search with independent fallback | Public endpoint limits |
+| AnySearch | Yes | — | Anonymous JSON search | Public endpoint limits |
+| Keenable | Yes | — | Anonymous MCP or keyed REST search | Endpoint/account-defined |
+| Perplexity | Yes | — | Sonar answers and citations; configurable model and output token budget | Account billing |
+| DeepSeek official | Yes | — | Hosted web search with citations; separate search credential | Account billing |
 
 ### Quick Recommendation Guide
 
@@ -190,11 +232,13 @@ New installations default to **Exa**; existing installations keep their saved pr
 
 ## Local Development
 
+Use Node.js 22.21.1 or a supported newer Node release. CI tests both `main` and `dev` with the committed npm lockfile.
+
 ```bash
-pnpm install          # Install dependencies
-pnpm test             # Run test suite
-pnpm run typecheck    # Type checking
-pnpm run build        # Build bundle into lib/
+npm ci --include=optional # Install dependencies
+npm test              # Run test suite
+npm run typecheck    # Type checking
+npm run build        # Build bundle into lib/
 
 ```
 

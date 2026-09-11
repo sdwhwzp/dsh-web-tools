@@ -7,12 +7,18 @@
  */
 
 import type { ProviderOptionView } from "./provider-options.ts";
+import type { SearchAccessMode, SearchAuthentication } from "./search-policy.ts";
 
 /** Search routing policy — how the host picks which provider to try first. */
 export type SearchRoutingPolicy = "ordered" | "round-robin" | "random";
 
 /** One provider as surfaced to the settings card. */
 export interface ProviderView {
+  /** The selected access mode excludes this provider's required API credentials. */
+  excludedByMode?: boolean;
+  /** Whether account quota should be shown for the selected search access mode. */
+  accountSearchEnabled?: boolean;
+  authentication?: SearchAuthentication;
   name: string;
   label: string;
   description: string;
@@ -35,6 +41,10 @@ export interface ProviderView {
 
 /** Full config snapshot for the card. */
 export interface ConfigView {
+  searchAccessMode?: SearchAccessMode;
+  cacheTtlSeconds?: number;
+  cacheMaxEntries?: number;
+  publicPlatformLanguage?: "zh" | "en";
   enabled: boolean;
   defaultProvider: string;
   providerAttemptTimeoutMs: number;

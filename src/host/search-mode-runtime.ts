@@ -53,8 +53,9 @@ export const REQUIRED_SEARCH_TEXT = [
   "Web Search is required for this turn.",
   "Before finalizing, complete at least one web_search or web_fetch call.",
   "Use web_fetch for a specific URL; otherwise use web_search.",
-  "To target a platform, use exactly one routing prefix such as 小红书: or X:; do not repeat the platform name as a topic keyword.",
-  "The provider removes that routing prefix before entering the platform search box.",
+  "To target a platform, use exactly one routing prefix such as 小红书:, X:, GitHub:, V2EX:, Bilibili:, Reddit:, HN:, StackOverflow:, Wikipedia:, or npm:; do not repeat the platform name as a topic keyword.",
+  "The provider removes that routing prefix before sending the query to the platform. GitHub searches repositories; V2EX matches current hot topics only.",
+  "For a date constraint, add after:YYYY-MM-DD, before:YYYY-MM-DD, or time:3d to the search query. Filters vary by source; check source dates before claiming recency.",
   "Treat web_search snippets as discovery evidence, not page details or comments.",
   "Describe comments or replies as verified only when web_fetch returns their contents.",
   "If web access fails, say what could not be verified.",
@@ -158,6 +159,8 @@ export class SearchModeRuntime {
 export interface SearchModeRuntimeDeps {
   /** True when a usable search provider exists (from the plugin's provider). */
   searchAvailable: () => boolean;
+  /** Logged search-source guidance for automatic mode, refreshed at the first step of each turn. */
+  guidance?: () => unknown;
 }
 
 /**
@@ -248,7 +251,7 @@ interface ScopedAgent {
  */
 export function installSearchModeRuntime(
   ctx: WebToolsContext,
-  _deps: SearchModeRuntimeDeps,
+  deps: SearchModeRuntimeDeps,
   runtime: SearchModeRuntime,
   messages: SearchModeMessages,
 ) {
@@ -264,7 +267,8 @@ export function installSearchModeRuntime(
           if (!decision || (decision as { kind?: string }).kind === "reject") return decision;
           if (payload.signal?.aborted) return decision;
           const state = runtime.beginTurn(agent.id, payload.turn);
-          const inject = searchModeStepMessage(state, payload.step, messages);
+          const inject = searchModeStepMessage(state, payload.step, messages)
+            ?? (payload.step === 1 ? deps.guidance?.() : undefined);
           if (!inject) return decision;
           const entered = decision as { kind: "enter"; messages: unknown[] };
           // Prepend so the Search Mode policy sits before the user's direct

@@ -12,6 +12,7 @@ import type { WebToolsContext } from "./context-types.ts";
 import type { QuotaSnapshot } from "./quota.ts";
 import type { StoredProviderOptions } from "../shared/provider-options.ts";
 import type { SearchRoutingPolicy } from "../shared/api-types.ts";
+import type { SearchAccessMode } from "../shared/search-policy.ts";
 
 /** Persistent search routing policy id (shared with the client card). */
 export type ToolSearchRoutingPolicy = SearchRoutingPolicy;
@@ -32,13 +33,17 @@ export const DEFAULT_PROVIDER = "exa";
  * never the dsh-private cosmokit copy.
  */
 export const DEFAULT_SETTINGS = {
+  searchAccessMode: "api-first" as SearchAccessMode,
+  cacheTtlSeconds: 300,
+  cacheMaxEntries: 50,
+  publicPlatformLanguage: "zh" as "zh" | "en",
   enabled: true,
   defaultProvider: DEFAULT_PROVIDER,
   // Per-attempt budget for ONE provider call (the DSH tool owns the overall
   // web_search timeout). Distinct from tool-level timeout: this is how long a
   // single provider may run before we abort it and try the next one.
   providerAttemptTimeoutMs: 10000,
-  fallbackOrder: [] as string[],
+  fallbackOrder: ["bing", "ddg", "ddg-lite", "anysearch", "tavily", "keenable"] as string[],
   providerBaseUrls: {} as Record<string, string>,
   providerEnabled: {} as Record<string, boolean>,
   platformEnabled: { xiaohongshu: true, x: true } as Record<string, boolean>,
@@ -55,6 +60,10 @@ export const DEFAULT_SETTINGS = {
 
 /** Resolved settings shape (explicit interface — portable in emitted d.ts). */
 export interface WebToolsSettings {
+  searchAccessMode: SearchAccessMode;
+  cacheTtlSeconds: number;
+  cacheMaxEntries: number;
+  publicPlatformLanguage: "zh" | "en";
   enabled: boolean;
   defaultProvider: string;
   providerAttemptTimeoutMs: number;
@@ -71,6 +80,10 @@ export interface WebToolsSettings {
 
 /** The schema object for settings registration (official z<T> annotation). */
 export const Config: z<WebToolsSettings> = z.object({
+  searchAccessMode: z.union([z.const("free-only"), z.const("free-first"), z.const("api-first")]),
+  cacheTtlSeconds: z.number().step(1).min(0).max(300),
+  cacheMaxEntries: z.number().step(1).min(1).max(500),
+  publicPlatformLanguage: z.union([z.const("zh"), z.const("en")]),
   enabled: z.boolean(),
   defaultProvider: z.string(),
   providerAttemptTimeoutMs: z.number().step(1).min(1000).max(60000),

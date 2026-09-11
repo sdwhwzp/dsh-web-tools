@@ -70,7 +70,7 @@ const deps = {
 };
 
 const { server, getHandler } = mockServer();
-registerRoutes({ webServer: server, webRuntime: { trustedHosts: [] } }, deps);
+registerRoutes({ webServer: server, webRuntime: { trustedHosts: [] }, get: () => undefined }, deps);
 const handler = getHandler();
 
 async function call(method, payload, opts = {}) {
@@ -168,7 +168,7 @@ test("platform/status automatically verifies persisted sessions before respondin
     },
   };
   const { server: s, getHandler: g } = mockServer();
-  registerRoutes({ webServer: s, webRuntime: { trustedHosts: [] } }, platformDeps);
+  registerRoutes({ webServer: s, webRuntime: { trustedHosts: [] }, get: () => undefined }, platformDeps);
 
   const { req, res } = fakeReqRes("POST", `${API_PREFIX}/platform/status`, {});
   await g()(req, res);
@@ -200,7 +200,7 @@ test("config/save persists BEFORE returning saved:true", async () => {
     },
   };
   const { server: s2, getHandler: g2 } = mockServer();
-  registerRoutes({ webServer: s2, webRuntime: { trustedHosts: [] } }, saveDeps);
+  registerRoutes({ webServer: s2, webRuntime: { trustedHosts: [] }, get: () => undefined }, saveDeps);
   const h2 = g2();
   const { req, res } = fakeReqRes("POST", `${API_PREFIX}/config/save`, { defaultProvider: "exa" });
   await h2(req, res);
@@ -235,7 +235,7 @@ test("credentials/add-key appends one key and persists the joined string", async
     writeCredential: async (ref, value) => { written = value; },
   };
   const { server: s, getHandler: g } = mockServer();
-  registerRoutes({ webServer: s, webRuntime: { trustedHosts: [] } }, addDeps);
+  registerRoutes({ webServer: s, webRuntime: { trustedHosts: [] }, get: () => undefined }, addDeps);
   const h = g();
   const { req, res } = fakeReqRes("POST", `${API_PREFIX}/credentials/add-key`, { provider: "tavily", value: "tvly-dev-key-three-9999" });
   await h(req, res);
@@ -258,7 +258,7 @@ test("credentials/remove-key removes by opaque id, not by value", async () => {
     writeCredential: async (ref, value) => { written = value; },
   };
   const { server: s, getHandler: g } = mockServer();
-  registerRoutes({ webServer: s, webRuntime: { trustedHosts: [] } }, rmDeps);
+  registerRoutes({ webServer: s, webRuntime: { trustedHosts: [] }, get: () => undefined }, rmDeps);
   const h = g();
 
   // discover the id for the second key via config/get (ids are per-key stable)
@@ -293,7 +293,7 @@ test("removing the LAST key writes an empty value (routes hand empty to the writ
     writeCredential: async (ref, value) => { written = { ref, value }; store = value; },
   };
   const { server: s, getHandler: g } = mockServer();
-  registerRoutes({ webServer: s, webRuntime: { trustedHosts: [] } }, rmDeps);
+  registerRoutes({ webServer: s, webRuntime: { trustedHosts: [] }, get: () => undefined }, rmDeps);
   const h = g();
 
   // Discover both key ids via config/get.
@@ -348,4 +348,68 @@ test("fusion settings persist valid values and reject invalid patches without wr
     assert.equal((await call("config/save", invalid)).body.ok, false);
   }
   assert.equal(writes.length, 1);
+});
+
+test("gateway identities protect shared settings and authorize only owned session controls", async () => {
+  const { server, getHandler } = mockServer();
+  const user = { source: "deployment", id: "2", username: "reader", role: "user" };
+  const services = new Map();
+  const writes = [];
+  const sessionCalls = [];
+  registerRoutes({ webServer: server, get: (name) => services.get(name) }, {
+    ...deps,
+    writeConfig: async (value) => { writes.push(value); },
+    writeCredential: async (ref, value) => { writes.push({ ref, value }); },
+    searchMode: {
+      view: (id) => { sessionCalls.push(id); return { mode: "auto", available: true }; },
+      set: (id, mode) => { sessionCalls.push(id); return { mode, available: true }; },
+    },
+  });
+  const invoke = async (method, payload = {}, extraHeaders = {}) => {
+    const { req, res } = fakeReqRes("POST", `${API_PREFIX}/${method}`, payload, "127.0.0.1:3080", {
+      origin: "http://127.0.0.1:3080", ...extraHeaders,
+    });
+    await getHandler()(req, res);
+    return { status: res.statusCode, body: JSON.parse(res.body) };
+  };
+
+  // The deployment may publish these services after this plugin mounts.
+  services.set("requestPrincipal", { authenticate: () => user });
+  for (const endpoint of ["config/get", "config/save", "credentials/set", "credentials/add-key", "credentials/remove-key", "credentials/describe", "test/provider", "test/search", "quota/describe", "version/check", "provider-options/set", "provider-options/reset", "provider-options/batch", "routing/set", "platform/status", "platform/login", "platform/stop", "platform/reset"]) {
+    assert.equal((await invoke(endpoint, { provider: "tavily", value: "unused", defaultProvider: "bing" })).status, 403, endpoint);
+  }
+  assert.deepEqual(writes, []);
+  assert.equal((await invoke("search-mode/get", { sessionId: "owned" })).status, 403);
+  services.set("principalAccess", {
+    resolve: async (principal, subjects) => {
+      assert.equal(principal, user);
+      return { readableSessionIds: new Set(subjects.sessionIds.filter((id) => id === "owned")) };
+    },
+  });
+  for (const method of ["search-mode/get", "search-mode/set"]) {
+    assert.equal((await invoke(method, { sessionId: "other", mode: "required" })).status, 403);
+    for (const sessionId of [undefined, [], {}, ""]) {
+      assert.equal((await invoke(method, { sessionId, mode: "required" })).status, 403);
+    }
+    assert.equal((await invoke(method, { sessionId: "owned", mode: "required" })).status, 200);
+  }
+  assert.deepEqual(sessionCalls, ["owned", "owned"]);
+
+  services.set("requestPrincipal", { authenticate: () => undefined });
+  assert.equal((await invoke("config/get", {}, { "x-dsh-principal": "forged-admin" })).status, 401);
+  services.set("requestPrincipal", { authenticate: () => { throw new Error("invalid signature"); } });
+  assert.equal((await invoke("config/get")).status, 403);
+  services.delete("requestPrincipal");
+  assert.equal((await invoke("config/get")).status, 403);
+
+  services.set("requestPrincipal", { authenticate: async () => ({ ...user, role: "admin" }) });
+  assert.equal((await invoke("config/save", { defaultProvider: "bing" })).status, 200);
+  assert.deepEqual(writes, [{ defaultProvider: "bing" }]);
+  assert.equal((await invoke("config/get")).status, 200);
+  assert.equal((await invoke("config/get", {}, { "sec-fetch-site": "cross-site" })).status, 403);
+
+  services.set("requestPrincipal", { authenticate: () => user });
+  services.set("principalAccess", { resolve: async () => { throw new Error("authorization unavailable"); } });
+  assert.equal((await invoke("search-mode/set", { sessionId: "owned", mode: "required" })).status, 403);
+  assert.deepEqual(sessionCalls, ["owned", "owned"]);
 });

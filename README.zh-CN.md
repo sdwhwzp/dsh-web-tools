@@ -62,6 +62,12 @@
 
 免费端点可能调整、要求浏览器验证、返回空结果或受到共享限流，不保证持续可用。可运行 `npm run probe:search` 检查当前网络下的免 Key 来源；该命令不测试付费 API 账号、私有 SearXNG 实例或已登录的 X / 小红书会话。上游版本及验证记录见[实现说明](https://github.com/sdwhwzp/dsh-web-tools/blob/dev/.agents/notes/implemented/feature/2026-09-11-unified-free-web-search.md)，来源许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
+### 多账号部署
+
+Harness 安装 `requestPrincipal` 服务后，`/web-tools/api` 通过该服务验证每个调用者。全局搜索配置、密钥、配额、搜索测试及浏览器登录管理仅限管理员；普通账号只能读取或修改 `principalAccess` 允许访问的会话搜索模式。身份验证或会话授权不可用时拒绝访问。独立本机安装保留回环地址和同源检查。
+
+提供方密钥及已登录的 X／小红书浏览器 Profile 属于共享 Host。多账号生产环境应通过 `platformEnabled: { x: false, xiaohongshu: false }` 关闭这两个来源，除非明确允许所有账号共享这些登录来源。公开平台及匿名网页搜索仍可使用。安装此 bundle 前记录完整的现有依赖固定版本和 Cordis patch 行；其中 `web` 和 `tool-web` 行会替换对应的整个配置对象。
+
 ## 它解决什么问题
 
 当联网能力只依赖一个 Web Provider 时，额度耗尽、限流或服务异常都可能直接中断检索；而简单接入多个搜索 API，往往又只能使用它们共同支持的基础能力，没有真正发挥不同搜索源各自擅长的搜索模式、分类、时效、域名策略和正文提取能力。

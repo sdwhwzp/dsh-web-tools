@@ -62,6 +62,12 @@ Each public platform has its own switch. A disabled platform or unavailable publ
 
 Free endpoints can change, require browser verification, return no results, or impose shared limits. They do not provide guaranteed availability. Run `npm run probe:search` for a keyless network check in your environment. This does not test paid API accounts, a private SearXNG instance, or signed-in X/Xiaohongshu sessions. The fusion source revisions and verification are recorded in [the implementation note](https://github.com/sdwhwzp/dsh-web-tools/blob/dev/.agents/notes/implemented/feature/2026-09-11-unified-free-web-search.md); upstream license notices are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
+### Multi-account deployment
+
+With a Harness `requestPrincipal` provider installed, `/web-tools/api` verifies every caller through that provider. Global provider settings, keys, quotas, search tests, and browser-login controls require an administrator. Ordinary accounts can read or change search mode only for sessions authorized by `principalAccess`; unavailable authentication or session authorization denies access. Standalone local installations retain the loopback and same-origin checks.
+
+Provider keys and signed-in X/Xiaohongshu browser profiles belong to the shared Host. In a multi-account production profile, disable X and Xiaohongshu through `platformEnabled: { x: false, xiaohongshu: false }` unless those signed-in sources are explicitly intended for all accounts. Public-platform searches and anonymous web providers remain available. Record the complete existing dependency pins and Cordis patch rows before installing this bundle; its `web` and `tool-web` rows replace the corresponding configuration objects.
+
 ## What problem does it solve?
 
 When web access depends on a single provider, exhausted quota, rate limits, or timeouts can interrupt retrieval. Wrapping multiple APIs with a naive proxy often flattens them to a lowest common denominator, failing to leverage each provider's specialized search modes, categories, freshness, domain rules, and extraction capabilities.

@@ -11,7 +11,7 @@
  * @module
  */
 import { searchAuthentication } from "./providers/types.ts";
-import type { WebToolsContext, WebToolsHttpRequest, WebToolsHttpResponse } from "./context-types.ts";
+import type { WebToolsContext, WebToolsHttpRequest, WebToolsHttpResponse, WebToolsRequestPrincipal, WebToolsPrincipalAccess } from "./context-types.ts";
 import { poolSummary, type PoolEntry } from "./pool.ts";
 import { buildPool, hintOf } from "./pool.ts";
 import { credRefOf, getProvider, PROVIDER_LIST } from "./providers/index.ts";
@@ -173,12 +173,13 @@ async function readJsonBody(req: WebToolsHttpRequest): Promise<unknown> {
 }
 
 /**
- * Configuration-plane fence: LOOPBACK ONLY + same-origin.
+ * Configuration-plane browser fence: loopback + same-origin.
  *
  * Unlike the general /api gateway, these routes mutate settings and
  * credentials — DSH treats that plane as privileged and `trustedHosts` is NOT
  * authentication. A LAN host reaching this DSH instance must NOT be able to
- * read or write provider config/keys.
+ * read or write provider config/keys. A gateway rewrites Host and Origin, so
+ * deployment authentication and session access checks also run before dispatch.
  *
  * Mirrors the official fence shape: the Host header is parsed as an authority
  * (handles IPv6 `[::1]:port`), and when an Origin header is present its host
@@ -228,6 +229,32 @@ function isNotCrossSite(req: WebToolsHttpRequest): boolean {
   const site = req.headers?.["sec-fetch-site"];
   if (typeof site !== "string" || site.length === 0) return true;
   return site !== "cross-site";
+}
+
+/** A deployment's identity and session decisions take precedence over local trust. */
+async function routeRejection(
+  ctx: WebToolsContext,
+  req: WebToolsHttpRequest,
+  method: string,
+  payload: unknown,
+): Promise<401 | 403 | undefined> {
+  const authentication = ctx.get("requestPrincipal") as WebToolsRequestPrincipal | undefined;
+  const access = ctx.get("principalAccess") as WebToolsPrincipalAccess | undefined;
+  if (authentication === undefined) return access === undefined ? undefined : 403;
+  try {
+    const principal = await authentication.authenticate(req);
+    if (principal === undefined) return 401;
+    if (principal.role === "admin") return undefined;
+    if (method !== "search-mode/get" && method !== "search-mode/set") return 403;
+    if (access === undefined) return 403;
+    const sessionId = (payload as { sessionId?: unknown } | null)?.sessionId;
+    if (typeof sessionId !== "string" || sessionId.length === 0) return 403;
+    const allowed = await access.resolve(principal, { sessionIds: [sessionId] });
+    return allowed.readableSessionIds.has(sessionId) ? undefined : 403;
+  } catch {
+    // Authentication or authorization failures never fall back to loopback access.
+    return 403;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -574,13 +601,18 @@ export function registerRoutes(ctx: WebToolsContext, deps: RouteDeps): () => voi
         writeError(res, 404, "not-found", "unknown web-tools API method");
         return;
       }
-      const handler = ENDPOINTS[method];
+      const handler = Object.hasOwn(ENDPOINTS, method) ? ENDPOINTS[method] : undefined;
       if (handler === undefined) {
         writeError(res, 404, "not-found", `unknown web-tools API method "${method}"`);
         return;
       }
       try {
         const payload = await readJsonBody(req);
+        const rejection = await routeRejection(ctx, req, method, payload);
+        if (rejection !== undefined) {
+          writeError(res, rejection, "forbidden", "forbidden");
+          return;
+        }
         writeOk(res, await handler(deps, payload));
       } catch (e) {
         writeError(res, 500, "internal", e instanceof Error ? e.message : String(e));

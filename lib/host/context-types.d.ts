@@ -21,6 +21,25 @@ export interface WebToolsHttpResponse {
     writeHead(status: number, headers?: Record<string, string>): void;
     end(body?: string | Uint8Array): void;
 }
+/** Caller identity returned by the deployment's authenticated request service. */
+export interface WebToolsPrincipal {
+    readonly source: string;
+    readonly id: string;
+    readonly username: string;
+    readonly role: "admin" | "user";
+}
+/** Optional deployment authentication, resolved for each HTTP request. */
+export interface WebToolsRequestPrincipal {
+    authenticate(request: WebToolsHttpRequest): WebToolsPrincipal | undefined | Promise<WebToolsPrincipal | undefined>;
+}
+/** Deployment-owned access check for a caller's session search controls. */
+export interface WebToolsPrincipalAccess {
+    resolve(principal: WebToolsPrincipal, subjects: {
+        sessionIds: readonly string[];
+    }): Promise<{
+        readableSessionIds: ReadonlySet<string>;
+    }>;
+}
 /** One named webserver route (mirror of host-webserver WebRoute). */
 export interface WebToolsWebRoute {
     kind: "exact" | "prefix";

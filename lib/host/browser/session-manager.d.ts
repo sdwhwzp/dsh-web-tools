@@ -1,4 +1,5 @@
 import { CdpClient } from "./cdp/client.ts";
+import { type BrowserSettings } from "./remote-login.ts";
 import { type LiveSessionVerifier } from "./live-auth-verifier.ts";
 import { type SpawnedBrowserProcess } from "./process-manager.ts";
 import type { BrowserInfo, BrowserPlatform, BrowserRunMode, BrowserSessionStatus, CdpPageLease, NativeBrowserRuntime } from "./types.ts";
@@ -17,8 +18,9 @@ export declare class SessionManager implements NativeBrowserRuntime {
     private readonly isPidAliveFn;
     private readonly killPidFn;
     private readonly liveSessionVerifier;
+    private readonly readBrowserSettings;
     private disposed;
-    constructor(browserChoice?: "auto" | "edge" | "chrome" | string, baseDirOverride?: string, idleShutdownMs?: number, launcher?: ProcessLauncher, cdpFactory?: CdpClientFactory, isPidAliveFn?: PidChecker, killPidFn?: PidKiller, liveSessionVerifier?: LiveSessionVerifier);
+    constructor(browserChoice?: string | (() => string), baseDirOverride?: string, idleShutdownMs?: number, launcher?: ProcessLauncher, cdpFactory?: CdpClientFactory, isPidAliveFn?: PidChecker, killPidFn?: PidKiller, liveSessionVerifier?: LiveSessionVerifier, readBrowserSettings?: () => BrowserSettings);
     private getRecord;
     private enqueue;
     detect(): Promise<BrowserInfo | null>;
@@ -31,6 +33,11 @@ export declare class SessionManager implements NativeBrowserRuntime {
     login(platform: BrowserPlatform, signal?: AbortSignal): Promise<BrowserSessionStatus>;
     private runLogin;
     private prepareInteractiveLogin;
+    startRemoteLogin(platform: BrowserPlatform): Promise<import("../../shared/remote-login.ts").RemoteLoginView>;
+    private remoteSession;
+    remoteLoginFrame(platform: BrowserPlatform, id: string): Promise<import("../../shared/remote-login.ts").RemoteLoginView>;
+    remoteLoginInput(platform: BrowserPlatform, id: string, input: unknown): Promise<void>;
+    closeRemoteLogin(platform: BrowserPlatform, id: string): Promise<void>;
     openPage(platform: BrowserPlatform, url: string, signal?: AbortSignal, mode?: BrowserRunMode): Promise<CdpPageLease>;
     createPage(platform: BrowserPlatform, signal?: AbortSignal, mode?: BrowserRunMode): Promise<CdpPageLease>;
     private retainLease;

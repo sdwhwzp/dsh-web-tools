@@ -10,6 +10,8 @@
 const STYLE_ID = "dsh-web-tools-v6-styles";
 
 const CSS = `
+.dswt-remote-login-dialog { width: min(1160px, calc(100vw - 24px)); max-width: calc(100vw - 24px); }
+
 /* ==========================================================================
    dsh-web-tools V6 Unified Stylesheet
    ========================================================================== */

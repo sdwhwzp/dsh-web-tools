@@ -44,11 +44,15 @@ export async function launchBrowserProcess(
   initialUrl?: string,
   minimized = false,
   headless = false,
+  display?: string,
+  xauthority?: string,
 ): Promise<SpawnedBrowserProcess> {
   const port = await allocateRandomPort();
   const args = buildSafeLaunchArgs(profileDir, port, initialUrl, minimized, headless);
 
   const cp = spawn(browser.executablePath, args, {
+    env: { ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !/KEY|SECRET|TOKEN|PASSWORD/i.test(key))),
+      ...(display ? { DISPLAY: display } : {}), ...(xauthority ? { XAUTHORITY: xauthority } : {}) },
     stdio: "ignore",
     detached: false,
   });

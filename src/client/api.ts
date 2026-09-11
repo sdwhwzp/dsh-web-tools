@@ -64,6 +64,7 @@ import type {
   BrowserPlatform,
   PlatformStatusResponse,
 } from "../shared/platform-types.ts";
+import type { RemoteLoginView, RemoteLoginInput } from "../shared/remote-login.ts";
 
 export type {
   ConfigView,
@@ -112,4 +113,8 @@ export const api = {
     call<{ ok: boolean }>("platform/stop", { platform }),
   platformReset: (platform: BrowserPlatform) =>
     call<{ ok: boolean }>("platform/reset", { platform }),
+  remoteLoginStart: (platform: BrowserPlatform) => call<RemoteLoginView>("remote-login/start", { platform }),
+  remoteLoginFrame: (platform: BrowserPlatform, id: string) => call<RemoteLoginView>("remote-login/frame", { platform, id }),
+  remoteLoginInput: (platform: BrowserPlatform, id: string, input: RemoteLoginInput) => call<{ ok: true }>("remote-login/input", { platform, id, input }),
+  remoteLoginClose: (platform: BrowserPlatform, id: string) => call<{ ok: true }>("remote-login/close", { platform, id }),
 };

@@ -153,7 +153,7 @@ export interface RouteDeps {
 // ---------------------------------------------------------------------------
 
 function writeJson(res: WebToolsHttpResponse, status: number, body: unknown) {
-  res.writeHead(status, { "content-type": "application/json" });
+  res.writeHead(status, { "content-type": "application/json", "cache-control": "no-store" });
   res.end(JSON.stringify(body));
 }
 
@@ -584,7 +584,33 @@ const ENDPOINTS: Record<string, (deps: RouteDeps, payload: unknown) => Promise<u
   "platform/login": (deps, payload) => handlePlatformLogin(deps, payload),
   "platform/stop": (deps, payload) => handlePlatformStop(deps, payload),
   "platform/reset": (deps, payload) => handlePlatformReset(deps, payload),
+  "remote-login/start": async (deps, payload) => {
+    const { platform } = remoteLoginRequest(payload, false);
+    return deps.nativeRuntime.startRemoteLogin(platform);
+  },
+  "remote-login/frame": async (deps, payload) => {
+    const { platform, id } = remoteLoginRequest(payload, true);
+    return deps.nativeRuntime.remoteLoginFrame(platform, id);
+  },
+  "remote-login/input": async (deps, payload) => {
+    const { platform, id, input } = remoteLoginRequest(payload, true);
+    await deps.nativeRuntime.remoteLoginInput(platform, id, input);
+    return { ok: true };
+  },
+  "remote-login/close": async (deps, payload) => {
+    const { platform, id } = remoteLoginRequest(payload, true);
+    await deps.nativeRuntime.closeRemoteLogin(platform, id);
+    return { ok: true };
+  },
 };
+
+function remoteLoginRequest(payload: unknown, requireId: boolean): { platform: BrowserPlatform; id: string; input: unknown } {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new Error("Invalid remote login request");
+  const value = payload as Record<string, unknown>;
+  if (value.platform !== "x" && value.platform !== "xiaohongshu") throw new Error("Invalid remote login platform");
+  if (requireId && (typeof value.id !== "string" || !/^[a-f0-9-]{36}$/.test(value.id))) throw new Error("Invalid remote login session");
+  return { platform: value.platform, id: typeof value.id === "string" ? value.id : "", input: value.input };
+}
 
 /** Register the fenced `/web-tools/api` prefix. Returns the disposer. */
 export function registerRoutes(ctx: WebToolsContext, deps: RouteDeps): () => void {

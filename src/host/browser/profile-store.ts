@@ -27,8 +27,9 @@ export class ProfileStore {
   ensureProfileDir(platform: BrowserPlatform): string {
     const dir = this.getProfileDir(platform);
     if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+      fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
     }
+    fs.chmodSync(dir, 0o700);
     return dir;
   }
 

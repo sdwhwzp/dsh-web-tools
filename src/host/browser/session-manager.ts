@@ -4,6 +4,7 @@ import { CdpPage } from "./cdp/page.ts";
 import { UrlDisallowedError } from "./cdp/errors.ts";
 import { locateBrowser } from "./locator.ts";
 import { loginUnavailableReason } from "./login-environment.ts";
+import { DEFAULT_BROWSER_SETTINGS, RemoteLoginSession, remoteLoginOptions, type BrowserSettings } from "./remote-login.ts";
 import { validatePlatformUrl } from "./paths.ts";
 import { ProfileStore } from "./profile-store.ts";
 import { StateStore } from "./state-store.ts";
@@ -64,6 +65,8 @@ interface PlatformLifecycleRecord {
   loginTask?: Promise<BrowserSessionStatus>;
   loginAbort?: AbortController;
   loginError?: string;
+  remoteLogin?: RemoteLoginSession;
+  remoteTimer?: NodeJS.Timeout;
 }
 
 const PLATFORM_AUTH_CONFIG: Record<
@@ -93,17 +96,18 @@ export class SessionManager implements NativeBrowserRuntime {
   private records = new Map<BrowserPlatform, PlatformLifecycleRecord>();
   private profileStore: ProfileStore;
   private stateStore: StateStore;
-  private readonly browserChoice: "auto" | "edge" | "chrome" | string;
+  private readonly browserChoice: string | (() => string);
   private readonly idleShutdownMs: number;
   private readonly launcher: ProcessLauncher;
   private readonly cdpFactory: CdpClientFactory;
   private readonly isPidAliveFn: PidChecker;
   private readonly killPidFn: PidKiller;
   private readonly liveSessionVerifier: LiveSessionVerifier;
+  private readonly readBrowserSettings: () => BrowserSettings;
   private disposed = false;
 
   constructor(
-    browserChoice: "auto" | "edge" | "chrome" | string = "auto",
+    browserChoice: string | (() => string) = "auto",
     baseDirOverride?: string,
     idleShutdownMs = 300000,
     launcher: ProcessLauncher = launchBrowserProcess,
@@ -120,8 +124,10 @@ export class SessionManager implements NativeBrowserRuntime {
       } catch {}
     },
     liveSessionVerifier: LiveSessionVerifier = verifyLiveBrowserSession,
+    readBrowserSettings: () => BrowserSettings = () => DEFAULT_BROWSER_SETTINGS,
   ) {
     this.browserChoice = browserChoice;
+    this.readBrowserSettings = readBrowserSettings;
     this.idleShutdownMs = idleShutdownMs;
     this.launcher = launcher;
     this.cdpFactory = cdpFactory;
@@ -155,7 +161,7 @@ export class SessionManager implements NativeBrowserRuntime {
 
   async detect(): Promise<BrowserInfo | null> {
     try {
-      return locateBrowser(this.browserChoice);
+      return locateBrowser(typeof this.browserChoice === "function" ? this.browserChoice() : this.browserChoice);
     } catch {
       return null;
     }
@@ -242,7 +248,8 @@ export class SessionManager implements NativeBrowserRuntime {
     return {
       ...status,
       loginPending: rec.loginTask !== undefined,
-      loginUnavailableReason: loginUnavailableReason(status.runtimeAvailable),
+      loginUnavailableReason: loginUnavailableReason(status.runtimeAvailable, process.platform,
+        { ...process.env, ...(this.readBrowserSettings().browserDisplay ? { DISPLAY: this.readBrowserSettings().browserDisplay } : {}) }),
       lastError: status.authenticated ? undefined : rec.loginError ?? status.lastError,
     };
   }
@@ -367,11 +374,14 @@ export class SessionManager implements NativeBrowserRuntime {
     const controller = new AbortController();
     rec.loginAbort = controller;
     const loginSignal = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal;
+    const remote = rec.remoteLogin;
     const task = this.runLogin(platform, loginSignal).then((result) => {
       rec.loginError = result.lastError;
+      remote?.finish(result.authenticated, result.lastError);
       return result;
     }, (error: unknown) => {
       rec.loginError = error instanceof Error ? error.message : String(error);
+      remote?.finish(false, rec.loginError);
       throw error;
     }).finally(() => {
       rec.loginTask = undefined;
@@ -409,12 +419,13 @@ export class SessionManager implements NativeBrowserRuntime {
       });
 
       loginPage = await this.prepareInteractiveLogin(session, config.initialUrl, signal);
-      if (platform === "xiaohongshu" && !loginPage) {
-        throw new Error("Unable to inspect the Xiaohongshu login page");
+      if ((platform === "xiaohongshu" || rec.remoteLogin) && !loginPage) {
+        throw new Error("Unable to open the platform login page");
       }
+      if (rec.remoteLogin && loginPage) await rec.remoteLogin.attach(session.cdp, loginPage.targetId, loginPage.sessionId);
 
       const start = Date.now();
-      const timeoutMs = 300000; // 5 min timeout for manual interaction
+      const timeoutMs = this.readBrowserSettings().remoteLoginTimeoutMs;
       let authenticated = false;
       let consecutiveReadyStates = 0;
 
@@ -541,6 +552,62 @@ export class SessionManager implements NativeBrowserRuntime {
     }
   }
 
+  async startRemoteLogin(platform: BrowserPlatform) {
+    if (this.disposed) throw new Error("NativeBrowserRuntime is disposed");
+    const status = await this.status(platform);
+    if (status.loginUnavailableReason) throw new Error(status.loginUnavailableReason);
+    const rec = this.getRecord(platform);
+    if (rec.remoteLogin?.active() && !rec.remoteLogin.expired()) {
+      rec.remoteLogin.touch();
+      return rec.remoteLogin.view();
+    }
+    if (rec.loginTask) throw new Error("A platform login is already running");
+    if (rec.remoteTimer) clearTimeout(rec.remoteTimer);
+    const remote = new RemoteLoginSession(platform, remoteLoginOptions(this.readBrowserSettings()));
+    rec.remoteLogin = remote;
+    const expire = () => {
+      if (rec.remoteLogin !== remote || this.disposed) return;
+      if (remote.expired()) {
+        remote.finish(false, "Remote login expired");
+        void this.stop(platform).catch(() => {}); // stop reports state through status.
+      } else {
+        rec.remoteTimer = setTimeout(expire, Math.min(remote.options.idleTimeoutMs, Math.max(1, remote.expiresAt - Date.now())));
+        rec.remoteTimer.unref();
+      }
+    };
+    rec.remoteTimer = setTimeout(expire, Math.min(remote.options.idleTimeoutMs, remote.options.timeoutMs));
+    rec.remoteTimer.unref();
+    void this.login(platform).catch(() => {}); // login retains its error in the remote view.
+    return remote.view();
+  }
+
+  private remoteSession(platform: BrowserPlatform, id: string): RemoteLoginSession {
+    const remote = this.getRecord(platform).remoteLogin;
+    if (!remote || remote.id !== id || remote.expired()) throw new Error("Remote login expired or closed");
+    return remote;
+  }
+
+  async remoteLoginFrame(platform: BrowserPlatform, id: string) {
+    const remote = this.remoteSession(platform, id);
+    try { return await remote.frame(); }
+    catch (error) {
+      if (!remote.active()) return remote.view();
+      remote.finish(false, error instanceof Error ? error.message : String(error));
+      return remote.view();
+    }
+  }
+
+  async remoteLoginInput(platform: BrowserPlatform, id: string, input: unknown): Promise<void> {
+    await this.remoteSession(platform, id).input(input);
+  }
+
+  async closeRemoteLogin(platform: BrowserPlatform, id: string): Promise<void> {
+    const rec = this.getRecord(platform);
+    // A stale tab must never close a newer login.
+    if (rec.remoteLogin?.id !== id) return;
+    await this.stop(platform);
+  }
+
   async openPage(
     platform: BrowserPlatform,
     url: string,
@@ -664,6 +731,9 @@ export class SessionManager implements NativeBrowserRuntime {
 
       // Check if current session matches desired mode
       if (rec.session && rec.state === "ready") {
+        if (rec.remoteLogin?.active() && rec.loginTask && rec.session.mode !== desiredMode) {
+          throw new Error("Complete the remote platform login before searching");
+        }
         if (rec.session.mode === desiredMode) {
           return rec.session;
         }
@@ -814,8 +884,13 @@ export class SessionManager implements NativeBrowserRuntime {
 
   async stop(platform: BrowserPlatform): Promise<void> {
     const rec = this.getRecord(platform);
+    const remote = rec.remoteLogin;
+    rec.remoteLogin = undefined;
+    if (rec.remoteTimer) clearTimeout(rec.remoteTimer);
+    rec.remoteTimer = undefined;
     const loginTask = rec.loginTask;
     rec.loginAbort?.abort();
+    await remote?.close();
     await this.enqueue(platform, async () => {
       await this.internalStop(rec);
     });

@@ -1,5 +1,11 @@
 /** Locale keys for the platform login controls. */
 import type { BrowserPlatformStatusView, LoginUnavailableReason } from "../shared/platform-types.ts";
+import type { RemoteLoginState } from "../shared/remote-login.ts";
+
+/** Locale key for the remote view's current operation state. */
+export function remoteLoginStatusKey(state: RemoteLoginState | undefined) {
+  return state === "authenticated" ? "remoteLoginSuccess" : state === "failed" ? "remoteLoginFailed" : state === "pending" ? "remoteLoginReady" : "remoteLoginStarting";
+}
 
 /**
  * Select the login message shown beside a platform button.

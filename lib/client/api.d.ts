@@ -17,6 +17,7 @@ export declare class WebToolsApiError extends Error {
 export declare function call<T>(method: string, payload?: unknown): Promise<T>;
 import type { ConfigView, CredentialsView, QuotaDescribeView, SearchMode, SearchModeView, TestProviderView, TestSearchView, SearchRoutingPolicy, VersionCheckView } from "../shared/api-types.ts";
 import type { BrowserPlatform, PlatformStatusResponse } from "../shared/platform-types.ts";
+import type { RemoteLoginView, RemoteLoginInput } from "../shared/remote-login.ts";
 export type { ConfigView, CredentialsView, ProviderView, QuotaDescribeView, QuotaView, SearchMode, SearchModeView, TestProviderView, TestSearchView, SearchRoutingPolicy, VersionCheckView, } from "../shared/api-types.ts";
 export type { BrowserPlatform, PlatformStatusResponse, } from "../shared/platform-types.ts";
 export declare const api: {
@@ -67,5 +68,13 @@ export declare const api: {
     }>;
     platformReset: (platform: BrowserPlatform) => Promise<{
         ok: boolean;
+    }>;
+    remoteLoginStart: (platform: BrowserPlatform) => Promise<RemoteLoginView>;
+    remoteLoginFrame: (platform: BrowserPlatform, id: string) => Promise<RemoteLoginView>;
+    remoteLoginInput: (platform: BrowserPlatform, id: string, input: RemoteLoginInput) => Promise<{
+        ok: true;
+    }>;
+    remoteLoginClose: (platform: BrowserPlatform, id: string) => Promise<{
+        ok: true;
     }>;
 };

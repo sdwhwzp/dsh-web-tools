@@ -64,7 +64,11 @@
 
 ### 多账号部署
 
-小红书和 X 的登录窗口打开在运行 DSH 的主机上。远程网页不会在访问者的电脑上弹出该窗口，当前版本不提供网页远程桌面。主机需要安装 Chrome／Chromium 或 Edge，Linux 还需要服务进程可访问的图形桌面。平台设置会显示缺少浏览器或桌面的原因、等待登录状态及启动失败或超时错误；重复点击不会启动多个登录流程。
+管理员在平台设置中点击「登录」，可在网页弹窗内操作小红书或 X 的服务端登录页面，支持点击、键盘输入、粘贴、滚动及滑块拖动。扫码、密码和验证码由管理员完成；文字输入栏发送后清空。使用手机号、邮箱或用户名登录，第三方账号的独立弹窗不在当前视图内。关闭窗口停止远程控制，保留浏览器的登录 Profile。
+
+主机需要 Chrome／Chromium 或 Edge；Linux 可以运行带 Xauthority 的 Xvfb 私有显示服务，无需开放远程桌面端口。在 `settings.yaml` 的 `dsh-web-tools` 命名空间配置 `browserExecutable`（默认 `auto`）、`browserDisplay` 及 `browserXauthority`（默认继承环境）。这三个部署配置不通过网页修改。远程视图默认 1100 × 760、每秒刷新、5 分钟总期限及 2 分钟空闲期限，可配置 `remoteLoginWidth`、`remoteLoginHeight`、`remoteLoginPollIntervalMs`、`remoteLoginTimeoutMs`、`remoteLoginIdleTimeoutMs`、`remoteLoginQuality`。新会话使用最新配置。
+
+`/web-tools/api/remote-login/{start,frame,input,close}` 沿用管理员身份及同源验证。画面和输入不写日志，HTTP 响应禁止缓存；接口不提供 Cookie、任意脚本、URL 导航或原始浏览器调试命令。调试连接仅监听回环地址。关闭或过期的控制 ID 不能控制下一次登录。
 
 Harness 安装 `requestPrincipal` 服务后，`/web-tools/api` 通过该服务验证每个调用者。全局搜索配置、密钥、配额、搜索测试及浏览器登录管理仅限管理员；普通账号只能读取或修改 `principalAccess` 允许访问的会话搜索模式。身份验证或会话授权不可用时拒绝访问。独立本机安装保留回环地址和同源检查。
 

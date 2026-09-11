@@ -8,5 +8,5 @@ export interface SpawnedBrowserProcess {
     startedAt: number;
 }
 export declare function buildSafeLaunchArgs(profileDir: string, port: number, initialUrl?: string, minimized?: boolean, headless?: boolean): string[];
-export declare function launchBrowserProcess(browser: BrowserInfo, profileDir: string, initialUrl?: string, minimized?: boolean, headless?: boolean): Promise<SpawnedBrowserProcess>;
+export declare function launchBrowserProcess(browser: BrowserInfo, profileDir: string, initialUrl?: string, minimized?: boolean, headless?: boolean, display?: string, xauthority?: string): Promise<SpawnedBrowserProcess>;
 export declare function isPidAlive(pid: number): boolean;

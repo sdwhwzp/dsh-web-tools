@@ -1,4 +1,5 @@
 import type { NativeBrowserRuntime } from "./types.ts";
+import { type BrowserSettings } from "./remote-login.ts";
 export * from "./types.ts";
 export * from "./locator.ts";
 export * from "./paths.ts";
@@ -11,4 +12,4 @@ export * from "./cdp/client.ts";
 export * from "./cdp/connection.ts";
 export * from "./cdp/page.ts";
 export * from "./cdp/errors.ts";
-export declare function createNativeBrowserRuntime(browserChoice?: "auto" | "edge" | "chrome" | string, baseDirOverride?: string, idleShutdownMs?: number): NativeBrowserRuntime;
+export declare function createNativeBrowserRuntime(browserChoice?: string | (() => string), baseDirOverride?: string, idleShutdownMs?: number, readBrowserSettings?: () => BrowserSettings): NativeBrowserRuntime;

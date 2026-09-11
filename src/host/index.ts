@@ -309,7 +309,7 @@ export function apply(ctx: WebToolsContext) {
   ctx.effect(() => ctx.web.registerFetchProvider(routedFetchProvider as never), "dsh-web-tools: fetch provider");
 
   // Specialized Sources: Register Xiaohongshu and Twitter/X with NativeBrowserRuntime
-  const nativeRuntime = createNativeBrowserRuntime();
+  const nativeRuntime = createNativeBrowserRuntime(() => readConfig().browserExecutable, undefined, undefined, readConfig);
   const xhsSource = new XiaohongshuSource(nativeRuntime);
   const xSource = new XSource(nativeRuntime);
   sourceRegistry.registerSource(xhsSource);

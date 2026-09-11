@@ -1,5 +1,7 @@
 import { SessionManager } from "./session-manager.ts";
 import type { NativeBrowserRuntime } from "./types.ts";
+import { DEFAULT_BROWSER_SETTINGS, type BrowserSettings } from "./remote-login.ts";
+import { launchBrowserProcess } from "./process-manager.ts";
 
 export * from "./types.ts";
 export * from "./locator.ts";
@@ -15,9 +17,12 @@ export * from "./cdp/page.ts";
 export * from "./cdp/errors.ts";
 
 export function createNativeBrowserRuntime(
-  browserChoice: "auto" | "edge" | "chrome" | string = "auto",
+  browserChoice: string | (() => string) = "auto",
   baseDirOverride?: string,
   idleShutdownMs?: number,
+  readBrowserSettings: () => BrowserSettings = () => DEFAULT_BROWSER_SETTINGS,
 ): NativeBrowserRuntime {
-  return new SessionManager(browserChoice, baseDirOverride, idleShutdownMs);
+  return new SessionManager(browserChoice, baseDirOverride, idleShutdownMs,
+    (browser, profile, url, minimized, headless) => launchBrowserProcess(browser, profile, url, minimized, headless, readBrowserSettings().browserDisplay, readBrowserSettings().browserXauthority),
+    undefined, undefined, undefined, undefined, readBrowserSettings);
 }

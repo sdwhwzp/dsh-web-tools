@@ -1,0 +1,5 @@
+[
+  { "state": "starting", "width": 1100, "height": 760, "image": false, "zh": "正在打开服务端登录页面…", "en": "Opening the Host login page…" },
+  { "state": "pending", "width": 1100, "height": 760, "image": true, "zh": "请在下方页面完成登录", "en": "Complete login on the page below" },
+  { "state": "authenticated", "width": 1100, "height": 760, "image": false, "zh": "登录成功，已保存共享登录状态。可以关闭此窗口。", "en": "Signed in. The shared session is saved; you can close this window." }
+]

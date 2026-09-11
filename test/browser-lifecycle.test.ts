@@ -857,3 +857,47 @@ test("stopping a pending manual login waits for its operation to finish", async 
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 });
+
+
+test("remote login reopens one capability, confines input, and closes without deleting the profile", async () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dsh-remote-lifecycle-"));
+  const fakeProc = createFakeProcessManager();
+  class RemoteCdp extends FakeCdpClient {
+    override async send<T = unknown>(method: string, params = {}, sessionId?: string, signal?: AbortSignal): Promise<T> {
+      if (method === "Storage.getCookies") return { cookies: [] } as T;
+      if (method === "Target.getTargetInfo") return { targetInfo: { url: "https://x.com/i/flow/login" } } as T;
+      if (method === "Page.captureScreenshot") return { data: "dGVzdA==" } as T;
+      return super.send<T>(method, params, sessionId, signal);
+    }
+  }
+  const { DEFAULT_BROWSER_SETTINGS } = await import("../src/host/browser/remote-login.ts");
+  const runtime = new SessionManager("auto", tmpDir, 0, fakeProc.launcher,
+    async () => new RemoteCdp() as unknown as import("../src/host/browser/cdp/client.ts").CdpClient,
+    fakeProc.isPidAlive, fakeProc.killPid, undefined, () => ({ ...DEFAULT_BROWSER_SETTINGS, browserDisplay: ":test" }));
+  runtime.detect = async () => ({ kind: "chrome", executablePath: "/test/browser" });
+  try {
+    const first = await runtime.startRemoteLogin("x");
+    assert.equal((await runtime.startRemoteLogin("x")).id, first.id);
+    let frame = await runtime.remoteLoginFrame("x", first.id);
+    const deadline = Date.now() + 5000;
+    while (frame.state === "starting" && Date.now() < deadline) {
+      await new Promise<void>(resolve => setImmediate(resolve));
+      frame = await runtime.remoteLoginFrame("x", first.id);
+    }
+    assert.equal(frame.state, "pending");
+    assert.equal(frame.image, "data:image/jpeg;base64,dGVzdA==");
+    await runtime.remoteLoginInput("x", first.id, { type: "key", key: "Tab" });
+    await assert.rejects(runtime.remoteLoginInput("xiaohongshu", first.id, { type: "key", key: "Tab" }), /expired or closed/);
+    await assert.rejects(runtime.createPage("x"), /Complete the remote/);
+    await runtime.closeRemoteLogin("x", "wrong-id");
+    assert.equal((await runtime.status("x")).loginPending, true);
+    await runtime.closeRemoteLogin("x", first.id);
+    assert.equal((await runtime.status("x")).loginPending, false);
+    assert.equal(fakeProc.activeProcesses.length, 0);
+    assert.ok(fs.existsSync(new ProfileStore(tmpDir).getProfileDir("x")));
+    await assert.rejects(runtime.remoteLoginFrame("x", first.id), /expired or closed/);
+  } finally {
+    await runtime.dispose();
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});

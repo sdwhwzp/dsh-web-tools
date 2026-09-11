@@ -13,6 +13,7 @@ import type { QuotaSnapshot } from "./quota.ts";
 import type { StoredProviderOptions } from "../shared/provider-options.ts";
 import type { SearchRoutingPolicy } from "../shared/api-types.ts";
 import type { SearchAccessMode } from "../shared/search-policy.ts";
+import { DEFAULT_BROWSER_SETTINGS, type BrowserSettings } from "./browser/remote-login.ts";
 
 /** Persistent search routing policy id (shared with the client card). */
 export type ToolSearchRoutingPolicy = SearchRoutingPolicy;
@@ -33,6 +34,7 @@ export const DEFAULT_PROVIDER = "exa";
  * never the dsh-private cosmokit copy.
  */
 export const DEFAULT_SETTINGS = {
+  ...DEFAULT_BROWSER_SETTINGS,
   searchAccessMode: "api-first" as SearchAccessMode,
   cacheTtlSeconds: 300,
   cacheMaxEntries: 50,
@@ -59,7 +61,7 @@ export const DEFAULT_SETTINGS = {
 };
 
 /** Resolved settings shape (explicit interface — portable in emitted d.ts). */
-export interface WebToolsSettings {
+export interface WebToolsSettings extends BrowserSettings {
   searchAccessMode: SearchAccessMode;
   cacheTtlSeconds: number;
   cacheMaxEntries: number;
@@ -80,6 +82,15 @@ export interface WebToolsSettings {
 
 /** The schema object for settings registration (official z<T> annotation). */
 export const Config: z<WebToolsSettings> = z.object({
+  browserExecutable: z.string(),
+  browserDisplay: z.string(),
+  browserXauthority: z.string(),
+  remoteLoginWidth: z.number().step(1).min(640).max(1920),
+  remoteLoginHeight: z.number().step(1).min(480).max(1080),
+  remoteLoginTimeoutMs: z.number().step(1).min(30000).max(900000),
+  remoteLoginIdleTimeoutMs: z.number().step(1).min(10000).max(300000),
+  remoteLoginPollIntervalMs: z.number().step(1).min(250).max(5000),
+  remoteLoginQuality: z.number().step(1).min(30).max(95),
   searchAccessMode: z.union([z.const("free-only"), z.const("free-first"), z.const("api-first")]),
   cacheTtlSeconds: z.number().step(1).min(0).max(300),
   cacheMaxEntries: z.number().step(1).min(1).max(500),

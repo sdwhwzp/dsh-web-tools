@@ -100,6 +100,11 @@ export interface NativeBrowserRuntime {
   detect(): Promise<BrowserInfo | null>;
   status(platform: BrowserPlatform): Promise<BrowserSessionStatus>;
   login(platform: BrowserPlatform, signal?: AbortSignal): Promise<BrowserSessionStatus>;
+  /** Start or reopen a temporary remote view of the platform login. */
+  startRemoteLogin(platform: BrowserPlatform): Promise<import("../../shared/remote-login.ts").RemoteLoginView>;
+  remoteLoginFrame(platform: BrowserPlatform, id: string): Promise<import("../../shared/remote-login.ts").RemoteLoginView>;
+  remoteLoginInput(platform: BrowserPlatform, id: string, input: unknown): Promise<void>;
+  closeRemoteLogin(platform: BrowserPlatform, id: string): Promise<void>;
   checkAuthentication(platform: BrowserPlatform): Promise<boolean>;
   verifyAuthenticationForOperation(
     platform: BrowserPlatform,

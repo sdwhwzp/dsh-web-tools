@@ -95,6 +95,31 @@ test("platform/login rejects missing Host prerequisites instead of returning pen
   }
 });
 
+test("remote login routes preserve the platform/session pair and prohibit caching", async () => {
+  const { server, getHandler } = mockServer();
+  const id = "00000000-0000-4000-8000-000000000001";
+  const calls = [];
+  registerRoutes({ webServer: server, get: () => undefined }, { ...deps, nativeRuntime: {
+    startRemoteLogin: async (...args) => { calls.push(args); return { id, state: "starting" }; },
+    remoteLoginFrame: async (...args) => { calls.push(args); return { id, state: "pending", image: "data:image/jpeg;base64,dGVzdA==" }; },
+    remoteLoginInput: async (...args) => { calls.push(args); },
+    closeRemoteLogin: async (...args) => { calls.push(args); },
+  } });
+  for (const action of ["start", "frame", "input", "close"]) {
+    const { req, res } = fakeReqRes("POST", `${API_PREFIX}/remote-login/${action}`, { platform: "x", id, input: { type: "key", key: "Enter" } });
+    await getHandler()(req, res);
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.headers["cache-control"], "no-store");
+  }
+  assert.deepEqual(calls, [["x"], ["x", id], ["x", id, { type: "key", key: "Enter" }], ["x", id]]);
+  for (const body of [{ platform: "other", id }, { platform: "x", id: "bad" }]) {
+    const { req, res } = fakeReqRes("POST", `${API_PREFIX}/remote-login/input`, body);
+    await getHandler()(req, res);
+    assert.equal(JSON.parse(res.body).ok, false);
+    assert.equal(calls.length, 4);
+  }
+});
+
 test("config/get returns providers with real pool size and no fake health", async () => {
   const { status, body } = await call("config/get");
   assert.equal(status, 200);
@@ -391,7 +416,7 @@ test("gateway identities protect shared settings and authorize only owned sessio
 
   // The deployment may publish these services after this plugin mounts.
   services.set("requestPrincipal", { authenticate: () => user });
-  for (const endpoint of ["config/get", "config/save", "credentials/set", "credentials/add-key", "credentials/remove-key", "credentials/describe", "test/provider", "test/search", "quota/describe", "version/check", "provider-options/set", "provider-options/reset", "provider-options/batch", "routing/set", "platform/status", "platform/login", "platform/stop", "platform/reset"]) {
+  for (const endpoint of ["config/get", "config/save", "credentials/set", "credentials/add-key", "credentials/remove-key", "credentials/describe", "test/provider", "test/search", "quota/describe", "version/check", "provider-options/set", "provider-options/reset", "provider-options/batch", "routing/set", "platform/status", "platform/login", "platform/stop", "platform/reset", "remote-login/start", "remote-login/frame", "remote-login/input", "remote-login/close"]) {
     assert.equal((await invoke(endpoint, { provider: "tavily", value: "unused", defaultProvider: "bing" })).status, 403, endpoint);
   }
   assert.deepEqual(writes, []);

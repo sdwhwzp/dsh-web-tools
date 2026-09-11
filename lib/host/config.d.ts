@@ -13,6 +13,7 @@ import type { QuotaSnapshot } from "./quota.ts";
 import type { StoredProviderOptions } from "../shared/provider-options.ts";
 import type { SearchRoutingPolicy } from "../shared/api-types.ts";
 import type { SearchAccessMode } from "../shared/search-policy.ts";
+import { type BrowserSettings } from "./browser/remote-login.ts";
 /** Persistent search routing policy id (shared with the client card). */
 export type ToolSearchRoutingPolicy = SearchRoutingPolicy;
 /** Settings namespace for this plugin. */
@@ -43,9 +44,18 @@ export declare const DEFAULT_SETTINGS: {
     providerOptions: StoredProviderOptions;
     braveQuotaCache: Record<string, QuotaSnapshot>;
     searchRoutingPolicy: ToolSearchRoutingPolicy;
+    browserExecutable: string;
+    browserDisplay: string;
+    browserXauthority: string;
+    remoteLoginWidth: number;
+    remoteLoginHeight: number;
+    remoteLoginTimeoutMs: number;
+    remoteLoginIdleTimeoutMs: number;
+    remoteLoginPollIntervalMs: number;
+    remoteLoginQuality: number;
 };
 /** Resolved settings shape (explicit interface — portable in emitted d.ts). */
-export interface WebToolsSettings {
+export interface WebToolsSettings extends BrowserSettings {
     searchAccessMode: SearchAccessMode;
     cacheTtlSeconds: number;
     cacheMaxEntries: number;

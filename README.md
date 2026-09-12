@@ -168,6 +168,8 @@ Each detail fetch includes at most 30 comments or replies, with up to 800 charac
 
 Agents use `小红书:` or `X:` as a platform-routing prefix. The prefix selects the platform and is removed before the native search runs; for example, `小红书: DeepSeek Harness` enters only `DeepSeek Harness` into Xiaohongshu's search box.
 
+Xiaohongshu native search waits for a visible, editable home-page field in either the traditional header or the newer home layout; the newer textarea submits with Enter. An unavailable field returns `search-control-unavailable`, while a submitted search that never becomes ready returns `navigation-failed`.
+
 * **General-Web Fallback**: Uses configured general search or fetch providers when a platform source is disabled, temporarily unavailable, or reports a retryable failure. Non-retryable sign-in, access-control, search-restriction, and invalid-detail errors are returned directly so indexed content is not presented as native platform results, details, or comments.
 * **Automated Session Verification**: Cookies are only the first gate. Xiaohongshu requires both `a1` and `web_session`, then performs a stabilized live `/explore` check in the interactive browser. A visible login wall invalidates the old session and restores the sign-in action; a wall appearing only after search submission is reported directly as `search-restricted` rather than being hidden behind indexed web results.
 

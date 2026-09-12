@@ -1,0 +1,11 @@
+{
+  "legacy": "#search-input",
+  "feeds": "#search-input-in-feeds",
+  "hiddenFeeds": "#search-input",
+  "readOnlyFeeds": "#search-input",
+  "disabled": null,
+  "hiddenAncestor": null,
+  "inert": null,
+  "zeroSize": null,
+  "noControl": null
+}

@@ -1,5 +1,5 @@
 {
   "extends": "./tsconfig.json",
-  "include": ["test/fused-*.test.ts", "test/free-providers.test.ts", "test/public-platforms.test.ts", "test/platform-login.test.ts", "test/remote-login.test.ts", "src/types/**/*.d.ts"],
+  "include": ["test/fused-*.test.ts", "test/free-providers.test.ts", "test/public-platforms.test.ts", "test/platform-login.test.ts", "test/xhs-ui-search.test.ts", "test/remote-login.test.ts", "src/types/**/*.d.ts"],
   "exclude": ["node_modules"]
 }

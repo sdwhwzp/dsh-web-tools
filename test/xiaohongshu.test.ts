@@ -20,6 +20,7 @@ test("XiaohongshuSource: executes search and fetch through NativeBrowserRuntime 
       return {} as any;
     },
     call: async (fn: any, args?: unknown[]) => {
+      if (fn.name === "findVisibleXhsSearchControl") return "#search-input";
       if (fn.name === "detectXhsPageState") return "ready";
       if (fn.name === "extractXhsSearchState") {
         return { available: true, feeds: [{ id: "note123" }] };
@@ -291,6 +292,7 @@ test("XiaohongshuSource: maps explore and post-submit login walls to different f
         waitForLoad: async () => {},
         waitForSelector: async () => {},
         call: async (fn: { name?: string }) => {
+          if (fn.name === "findVisibleXhsSearchControl") return "#search-input";
           if (fn.name === "detectXhsPageState") return submitted ? scenario.after : scenario.initial;
           return { available: false, feeds: [] };
         },

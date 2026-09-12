@@ -901,3 +901,60 @@ test("remote login reopens one capability, confines input, and closes without de
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 });
+
+for (const change of ["stop", "disconnect", "replacement"] as const) {
+  test(`platform status discards authentication from a browser after ${change}`, async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dsh-status-race-"));
+    const fakeProc = createFakeProcessManager();
+    const clients: FakeCdpClient[] = [];
+    let entered!: () => void;
+    const probing = new Promise<void>(resolve => { entered = resolve; });
+    let complete!: (authenticated: boolean) => void;
+    const authentication = new Promise<boolean>(resolve => { complete = resolve; });
+    const runtime = new SessionManager("auto", tmpDir, 0, fakeProc.launcher,
+      async () => {
+        const client = new FakeCdpClient();
+        const pid = fakeProc.activeProcesses.at(-1)!.pid;
+        client.onBrowserClose = () => fakeProc.killPid(pid);
+        clients.push(client);
+        return client as unknown as import("../src/host/browser/cdp/client.ts").CdpClient;
+      }, fakeProc.isPidAlive, fakeProc.killPid, async () => { entered(); return authentication; });
+    runtime.detect = async () => ({ kind: "chrome", executablePath: "/test/browser" });
+    const profiles = new ProfileStore(tmpDir);
+    const established = change !== "disconnect";
+    const metadata = { platform: "xiaohongshu" as const, browserKind: "chrome" as const,
+      sessionEstablished: established, lastVerifiedAt: 123 };
+    let pending: ReturnType<typeof runtime.status> | undefined;
+    try {
+      const page = await runtime.createPage("xiaohongshu", undefined, "interactive");
+      await page.close();
+      profiles.saveMetadata("xiaohongshu", metadata);
+      pending = runtime.status("xiaohongshu");
+      await Promise.race([probing, pending.then(() => { throw new Error("Status did not await authentication"); })]);
+      if (change === "stop") await runtime.stop("xiaohongshu");
+      else if (change === "disconnect") {
+        clients[0].close();
+        fakeProc.killPid(fakeProc.activeProcesses[0].pid);
+      } else {
+        const replacement = await runtime.createPage("xiaohongshu", undefined, "headless");
+        await replacement.close();
+      }
+      complete(!established);
+      const result = await pending;
+      assert.deepEqual(profiles.loadMetadata("xiaohongshu"), metadata, "a stale probe must not overwrite the profile's last observation");
+      const expected = JSON.parse(fs.readFileSync(new URL("./expected/status-race.json", import.meta.url), "utf8"))[change];
+      assert.deepEqual({ runtimeState: result.runtimeState, authenticated: result.authenticated,
+        authState: result.authState, sessionEstablished: result.sessionEstablished ?? false, mode: result.mode ?? null }, expected);
+      assert.equal(result.runtimeAvailable, true);
+      assert.equal(result.browser?.kind, "chrome");
+      assert.equal(result.lastError, undefined);
+      assert.equal(fakeProc.activeProcesses.length, change === "replacement" ? 1 : 0);
+    } finally {
+      complete(false);
+      await pending?.catch(() => {});
+      await runtime.dispose();
+      assert.equal(fakeProc.activeProcesses.length, 0);
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+}

@@ -30,6 +30,8 @@ export declare class SessionManager implements NativeBrowserRuntime {
     private hasRequiredCookies;
     status(platform: BrowserPlatform): Promise<BrowserSessionStatus>;
     private sessionStatus;
+    /** Report the current browser without applying an obsolete authentication probe. */
+    private unverifiedStatus;
     login(platform: BrowserPlatform, signal?: AbortSignal): Promise<BrowserSessionStatus>;
     private runLogin;
     private prepareInteractiveLogin;

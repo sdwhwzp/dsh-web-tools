@@ -1,6 +1,6 @@
 {
   "name": "dsh-web-tools",
-  "version": "0.4.0-dev.4",
+  "version": "0.4.0-dev.5",
   "description": "Unified free and API web search for DeepSeek Harness, with account-aware routing, platform search and page extraction",
   "author": "A3Boy",
   "license": "MIT",

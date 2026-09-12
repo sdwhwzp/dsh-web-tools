@@ -1,0 +1,5 @@
+{
+  "stop": { "runtimeState": "stopped", "authenticated": false, "authState": "unknown", "sessionEstablished": true, "mode": null },
+  "disconnect": { "runtimeState": "stopped", "authenticated": false, "authState": "signed-out", "sessionEstablished": false, "mode": null },
+  "replacement": { "runtimeState": "ready", "authenticated": false, "authState": "unknown", "sessionEstablished": true, "mode": "headless" }
+}

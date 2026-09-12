@@ -267,20 +267,23 @@ export class SessionManager implements NativeBrowserRuntime {
     }
 
     const rec = this.getRecord(platform);
-    if (rec.session) {
-      const auth = await this.internalCheckAuth(rec.session);
+    const session = rec.session;
+    if (session) {
+      const auth = await this.internalCheckAuth(session);
+      // Closing or replacing the browser invalidates this probe's result.
+      if (rec.session !== session) return this.unverifiedStatus(platform, browser);
       this.profileStore.saveMetadata(platform, {
         platform,
         sessionEstablished: auth,
-        browserKind: rec.session.browser.kind,
+        browserKind: session.browser.kind,
         lastVerifiedAt: Date.now(),
       });
       return {
         platform,
         runtimeAvailable: true,
         runtimeState: "ready",
-        browser: rec.session.browser,
-        mode: rec.session.mode,
+        browser: session.browser,
+        mode: session.mode,
         authState: auth ? "authenticated" : "signed-out",
         authenticated: auth,
         sessionEstablished: auth,
@@ -336,21 +339,26 @@ export class SessionManager implements NativeBrowserRuntime {
       }
     }
 
-    // Check profile metadata: did user establish session previously?
+    return this.unverifiedStatus(platform, browser);
+  }
+
+  /** Report the current browser without applying an obsolete authentication probe. */
+  private unverifiedStatus(platform: BrowserPlatform, browser: BrowserInfo): BrowserSessionStatus {
+    const session = this.getRecord(platform).session;
     const meta = this.profileStore.loadMetadata(platform);
-    if (meta && meta.sessionEstablished) {
-      // Persisted metadata only proves that this profile established a session
-      // before. Without a running browser, live usability is unknown even when
-      // the previous verification was recent; the status route will probe it.
+    if (session || meta?.sessionEstablished) {
+      // Metadata proves prior login only. A replacement browser needs its own
+      // live verification before its authentication can be reported.
       return {
         platform,
         runtimeAvailable: true,
-        runtimeState: "stopped",
-        browser,
+        runtimeState: session ? "ready" : "stopped",
+        browser: session?.browser ?? browser,
+        ...(session ? { mode: session.mode } : {}),
         authState: "unknown",
         authenticated: false,
-        sessionEstablished: true,
-        verifiedAt: meta.lastVerifiedAt,
+        sessionEstablished: meta?.sessionEstablished === true,
+        verifiedAt: meta?.lastVerifiedAt,
       };
     }
 

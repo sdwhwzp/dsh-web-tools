@@ -10,8 +10,10 @@ SessionManager owns the login task, remote capability, deadlines and browser lif
 
 RemoteLoginSession restricts capture and input to the selected platform tab, verifies its current URL before and after capture, bounds input and queue size, coalesces capture, and clears screenshots on completion. Responses use no-store. The browser view keeps only the latest frame and clears submitted text. Linux deployment uses a private Xvfb display, Xauthority and Chrome's normal sandbox; no public debugging or desktop port is added.
 
+Active-browser status checks capture the browser instance before awaiting authentication and publish their result only while that same instance remains current. A disconnected, stopped or replaced browser cannot overwrite profile metadata or provide authentication for its successor; the status response reports the current browser as unverified.
+
 ## Validation
 
-Unit and route tests cover input translation, bounds, platform URLs, authentication, no-store, deadline decisions, close versus input races and stale IDs. Lifecycle tests use isolated profiles and fake browser processes. Browser/UI and server probes use task-owned profiles and never submit platform credentials. Real account authentication remains a user action.
+Unit and route tests cover input translation, bounds, platform URLs, authentication, no-store, deadline decisions, close versus input races and stale IDs. Deferred authentication probes exercise status requests overlapping explicit stop, connection loss and replacement; expected output records the resulting unverified status and metadata remains unchanged. Lifecycle tests use isolated profiles and fake browser processes. Browser/UI and server probes use task-owned profiles and never submit platform credentials. Real account authentication remains a user action.
 
 The bridge uses the documented [Page capture API](https://chromedevtools.github.io/devtools-protocol/tot/Page/#method-captureScreenshot) and [Input API](https://chromedevtools.github.io/devtools-protocol/tot/Input/).

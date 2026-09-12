@@ -64,7 +64,7 @@
 
 ### 多账号部署
 
-管理员在平台设置中点击「登录」，可在网页弹窗内操作小红书或 X 的服务端登录页面，支持点击、键盘输入、粘贴、滚动及滑块拖动。扫码、密码和验证码由管理员完成；文字输入栏发送后清空。使用手机号、邮箱或用户名登录，第三方账号的独立弹窗不在当前视图内。关闭窗口停止远程控制，保留浏览器的登录 Profile。
+管理员在平台设置中点击「登录」，可在网页弹窗内操作小红书或 X 的服务端登录页面，支持点击、键盘输入、粘贴、滚动及滑块拖动。扫码、密码和验证码由管理员完成；文字输入栏发送后清空。使用手机号、邮箱或用户名登录，第三方账号的独立弹窗不在当前视图内。关闭窗口停止远程控制，保留浏览器的登录 Profile。浏览器关闭或替换期间的状态检查保留已保存的登录信息，将当前会话标为未验证。
 
 主机需要 Chrome／Chromium 或 Edge；Linux 可以运行带 Xauthority 的 Xvfb 私有显示服务，无需开放远程桌面端口。在 `settings.yaml` 的 `dsh-web-tools` 命名空间配置 `browserExecutable`（默认 `auto`）、`browserDisplay` 及 `browserXauthority`（默认继承环境）。这三个部署配置不通过网页修改。远程视图默认 1100 × 760、每秒刷新、5 分钟总期限及 2 分钟空闲期限，可配置 `remoteLoginWidth`、`remoteLoginHeight`、`remoteLoginPollIntervalMs`、`remoteLoginTimeoutMs`、`remoteLoginIdleTimeoutMs`、`remoteLoginQuality`。新会话使用最新配置。
 

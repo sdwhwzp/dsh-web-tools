@@ -258,8 +258,15 @@ export function installSearchModeRuntime(
   const onCreated = ctx.on("agent/created", (payload: { agent: ScopedAgent }) => {
     const agent = payload.agent;
     // Register this agent's listeners inside its own scope so scope-filtered
-    // dispatch reaches them; cleaning up when the agent scope unwinds.
-    return agent.ctx.effect(() => {
+    // dispatch reaches them; the effect unwinds with the agent scope, so its
+    // disposer is not needed here.
+    //
+    // It must NOT be returned either. Harness 0.1.6 announces `agent/created`
+    // through Cordis `serial`, which stops at the first listener whose result
+    // is not undefined/null/false; a returned disposer function silently
+    // starved every listener registered after this one (dsh-passwords' paired
+    // local-workspace tools among them) without any error anywhere.
+    agent.ctx.effect(() => {
       const stopPreStep = agent.ctx.on(
         "agent/pre-step",
         async (payload: { turn: number; step: number; signal?: AbortSignal }, next: () => Promise<unknown>) => {

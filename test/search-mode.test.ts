@@ -277,3 +277,44 @@ test("slash /search and the UI button write the same runtime", () => {
   r.setMode(id, r.getMode(id) === "required" ? "auto" : "required");
   assert.equal(r.getMode(id), "auto");
 });
+
+// Harness 0.1.6 announces `agent/created` through Cordis `serial`, which stops
+// at the first listener whose result is not undefined/null/false. Returning the
+// effect disposer from this listener therefore skipped every listener registered
+// after it — dsh-passwords' paired local-workspace tools among them — with no
+// error anywhere. The listener must register its per-agent effect and return
+// nothing.
+test("agent/created listener registers the agent effect and returns undefined", async () => {
+  const { installSearchModeRuntime } = await import("../src/host/search-mode-runtime.ts");
+  const listeners = new Map<string, (...args: unknown[]) => unknown>();
+  const noop = new Proxy(() => undefined, { get: () => () => undefined }) as never;
+  const ctx = {
+    on(event: string, listener: (...args: unknown[]) => unknown) { listeners.set(event, listener); return () => undefined; },
+    effect() {},
+    inject() {},
+    get() { return undefined; },
+    commands: noop,
+  } as never;
+  installSearchModeRuntime(ctx, { searchAvailable: () => true }, runtime(), {
+    required: () => ({}),
+    correction: () => ({}),
+  });
+  const created = listeners.get("agent/created");
+  assert.ok(created, "agent/created listener registered");
+
+  let effects = 0;
+  const agent = {
+    id: "s-effect",
+    steer() {},
+    cancel() {},
+    ctx: {
+      // Like Cordis, `effect` hands back a disposer; that disposer is exactly
+      // the value the buggy listener used to return.
+      effect(fn: () => void | (() => void)) { effects += 1; const undo = fn(); return () => undo?.(); },
+      on() { return () => undefined; },
+    },
+  };
+  const result = created!({ agent });
+  assert.equal(effects, 1, "per-agent listeners are installed through agent.ctx.effect");
+  assert.equal(result, undefined, "a returned value would bail serial dispatch for later listeners");
+});

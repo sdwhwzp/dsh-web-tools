@@ -1,5 +1,7 @@
 <div align="center">
 
+Web 客户端要求 Harness 0.1.7-alpha.2 或更新版本，搜索控件与设置页面使用宿主提供的共享图标。
+
 Harness 0.1.7 将搜索偏好持久化到插件 Loader 行，支持自定义行 ID；旧版宿主沿用设置命名空间。写入携带当前表单版本，缺少所属行或表单时拒绝修改。
 
 <p align="center">

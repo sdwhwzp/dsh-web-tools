@@ -1,6 +1,6 @@
 {
   "name": "dsh-web-tools",
-  "version": "0.4.0-dev.7-dsh.20260923.1",
+  "version": "0.4.0-dev.7-dsh.20260923.2",
   "description": "Unified free and API web search for DeepSeek Harness, with account-aware routing, platform search and page extraction",
   "author": "A3Boy",
   "license": "MIT",
@@ -56,7 +56,7 @@
     "@deepseek-ai/dsh-client-connection": "^0.1.0-rc.6",
     "@deepseek-ai/dsh-client-locale": "^0.1.0-rc.6",
     "@deepseek-ai/dsh-client-runtime": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-client-ui-primitives": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-ui-primitives": "^0.1.7-alpha.2",
     "@deepseek-ai/dsh-client-ui-settings": "^0.1.0-rc.6",
     "@deepseek-ai/dsh-client-ui-slots": "^0.1.0-rc.6",
     "@deepseek-ai/dsh-credentials": "^0.1.0-rc.6",
@@ -80,7 +80,8 @@
     "@types/react": "~18.3.31",
     "@types/ws": "^8.5.14",
     "tsdown": "^0.22.14",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "@deepseek-ai/dsh-client-ui-primitives": "0.1.7-alpha.2"
   },
   "repository": {
     "type": "git",

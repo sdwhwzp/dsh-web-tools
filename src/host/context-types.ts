@@ -72,7 +72,7 @@ export interface WebToolsWebRuntime {
 
 /** The settings service face (mirror of dsh-settings SettingsProvider). */
 export interface WebToolsSettingsService {
-  register<T>(
+  register?<T>(
     ns: string,
     schema: unknown,
     options?: { base?: Partial<T>; applies?: "live" | "restart" },
@@ -137,6 +137,8 @@ export interface WebToolsEffect {
  * and we only touch the members below.
  */
 export interface WebToolsContext {
+  /** Current Loader-owned config and entry for Harness 0.1.7 forms. */
+  fiber?: { entry?: { options: { id: string } }; config?: Record<string, unknown> };
   webServer: WebToolsWebServer;
   webRuntime: WebToolsWebRuntime;
   settings: WebToolsSettingsService;

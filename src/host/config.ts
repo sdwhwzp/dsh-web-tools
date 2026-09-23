@@ -1,7 +1,8 @@
 /**
  * dsh-web-tools — Host configuration: settings namespace + schema.
  *
- * The config (non-secret knobs) lives in a `dsh-web-tools` settings namespace
+ * The config (non-secret knobs) lives on the Loader profile row in Harness 0.1.7
+ * and in a `dsh-web-tools` settings namespace on older hosts. It is
  * registered through the settings service, so it persists with the deployment's
  * settings document. API keys are NOT here — they live in the credentials
  * domain (`WEB_TOOLS_*` refs).
@@ -134,11 +135,27 @@ export function installConfig(ctx: WebToolsContext): ConfigHandle {
   const mountedCbs: Array<() => void> = [];
 
   ctx.inject(["settings"], (sctx) => {
-    const registered = sctx.settings.register(SETTINGS_NS, Config, {
-      base: DEFAULT_SETTINGS,
-    });
-    scope = registered;
-    current = () => registered.get() as WebToolsSettings;
+    if (typeof sctx.settings.register === "function") {
+      const registered = sctx.settings.register(SETTINGS_NS, Config, { base: DEFAULT_SETTINGS });
+      scope = registered;
+      current = () => registered.get() as WebToolsSettings;
+    } else {
+      current = () => {
+        const id = ctx.fiber?.entry?.options.id;
+        const row = id === undefined ? undefined : sctx.settings.describe().find(row => row.ns === id);
+        const value = row?.value ?? ctx.fiber?.config ?? {};
+        return { ...DEFAULT_SETTINGS, ...Object.fromEntries(
+          Object.entries(value).filter(([, field]) => field !== undefined),
+        ) };
+      };
+      scope = { update: async (patch) => {
+        const id = ctx.fiber?.entry?.options.id;
+        if (id === undefined) throw new Error("dsh-web-tools settings require a Loader profile entry");
+        const row = sctx.settings.describe().find(row => row.ns === id);
+        if (row === undefined) throw new Error("dsh-web-tools profile settings form is unavailable");
+        await sctx.settings.update(id, patch, row.revision);
+      } };
+    }
     // Settings are readable only from here on; run deferred boot work now.
     for (const cb of mountedCbs.splice(0)) cb();
   });

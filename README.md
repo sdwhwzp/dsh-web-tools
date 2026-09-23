@@ -1,5 +1,7 @@
 <div align="center">
 
+Harness 0.1.7 persists search preferences on the plugin Loader row; the row id may be customized. Older hosts retain their namespace storage. Preference writes carry the current form revision and refuse a missing owner or form.
+
 <p align="center">
   <img src="https://raw.githubusercontent.com/A3Boy/dsh-web-tools/main/assets/logo.png" alt="dsh-web-tools" width="160" />
 </p>

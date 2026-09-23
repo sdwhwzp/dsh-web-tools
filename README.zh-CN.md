@@ -1,5 +1,7 @@
 <div align="center">
 
+Harness 0.1.7 将搜索偏好持久化到插件 Loader 行，支持自定义行 ID；旧版宿主沿用设置命名空间。写入携带当前表单版本，缺少所属行或表单时拒绝修改。
+
 <p align="center">
   <img src="https://raw.githubusercontent.com/A3Boy/dsh-web-tools/main/assets/logo.png" alt="dsh-web-tools" width="160" />
 </p>

@@ -1,7 +1,8 @@
 /**
  * dsh-web-tools — Host configuration: settings namespace + schema.
  *
- * The config (non-secret knobs) lives in a `dsh-web-tools` settings namespace
+ * The config (non-secret knobs) lives on the Loader profile row in Harness 0.1.7
+ * and in a `dsh-web-tools` settings namespace on older hosts. It is
  * registered through the settings service, so it persists with the deployment's
  * settings document. API keys are NOT here — they live in the credentials
  * domain (`WEB_TOOLS_*` refs).

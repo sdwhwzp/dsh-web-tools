@@ -162,8 +162,8 @@ test("required message is a plugin snapshot section carrying REQUIRED_SEARCH_TEX
   assert.ok(Array.isArray(input.content));
   assert.equal(input.content[0].type, "text");
   assert.equal(input.content[0].text, REQUIRED_SEARCH_TEXT);
-  assert.equal(input.source.kind, "plugin");
-  assert.equal(input.source.plugin, "dsh-web-tools");
+  assert.equal(input.source.kind, "plugin:dsh-web-tools");
+  assert.equal(Object.hasOwn(input.source, "plugin"), false);
   assert.equal(input.source.form, "snapshot");
   assert.equal(input.source.sections[0].name, "web-search-mode");
   assert.equal(input.source.sections[0].text, REQUIRED_SEARCH_TEXT);
@@ -188,8 +188,8 @@ test("correction message is a one-shot plugin notice (not a snapshot)", () => {
   assert.equal(calls.length, 1);
   const input = calls[0];
   assert.equal(input.content[0].text, REQUIRED_SEARCH_CORRECTION_TEXT);
-  assert.equal(input.source.kind, "plugin");
-  assert.equal(input.source.plugin, "dsh-web-tools");
+  assert.equal(input.source.kind, "plugin:dsh-web-tools");
+  assert.equal(Object.hasOwn(input.source, "plugin"), false);
   assert.equal(input.source.form, "notice");
   assert.equal(input.source.summary, "Web Search required");
 });

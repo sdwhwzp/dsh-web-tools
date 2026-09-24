@@ -50,7 +50,7 @@ test("the installed plugin routes free and public searches through its sole stan
   events.get("agent/created")!({ agent });
   const decision = await scopedEvents.get("agent/pre-step")!({ turn: 1, step: 1 }, async () => ({ kind: "enter", messages: [{ user: "query" }] })) as { messages: Array<{ source?: { kind: string; form: string; sections: Array<{ text: string }> } }> };
   assert.equal(decision.messages.length, 2);
-  assert.equal(decision.messages[0].source?.kind, "plugin");
+  assert.equal(decision.messages[0].source?.kind, "plugin:dsh-web-tools");
   assert.equal(decision.messages[0].source?.form, "snapshot");
   assert.doesNotMatch(decision.messages[0].source!.sections[0].text, /github:/);
   const later = await scopedEvents.get("agent/pre-step")!({ turn: 1, step: 2 }, async () => ({ kind: "enter", messages: [] })) as { messages: unknown[] };

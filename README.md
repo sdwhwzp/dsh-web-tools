@@ -1,5 +1,7 @@
 <div align="center">
 
+Search guidance, required-search snapshots, and correction notices use the producer source `plugin:dsh-web-tools`, matching migrated history and Session format V4.
+
 The Web client requires Harness 0.1.7-alpha.2 or later and uses its shared icon exports for search controls and settings.
 
 Harness 0.1.7 persists search preferences on the plugin Loader row; the row id may be customized. Older hosts retain their namespace storage. Preference writes carry the current form revision and refuse a missing owner or form.

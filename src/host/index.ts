@@ -508,7 +508,7 @@ export function apply(ctx: WebToolsContext) {
             const text = searchGuidance(cfg.platformEnabled);
             return createUserMessage({
               content: [{ type: "text", text }],
-              source: { kind: "plugin", plugin: "dsh-web-tools", form: "snapshot", sections: [{ name: "web-search-sources", text }] },
+              source: { kind: "plugin:dsh-web-tools", form: "snapshot", sections: [{ name: "web-search-sources", text }] },
             } as never);
           },
         },

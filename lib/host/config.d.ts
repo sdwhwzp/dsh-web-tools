@@ -1,7 +1,7 @@
 /**
  * dsh-web-tools — Host configuration: settings namespace + schema.
  *
- * The config (non-secret knobs) lives on the Loader profile row in Harness 0.1.7
+ * The config (non-secret knobs) lives on the Loader profile row in Harness 0.1.7+
  * and in a `dsh-web-tools` settings namespace on older hosts. It is
  * registered through the settings service, so it persists with the deployment's
  * settings document. API keys are NOT here — they live in the credentials
@@ -80,13 +80,12 @@ export declare const Config: z<WebToolsSettings>;
 export interface ConfigHandle {
     /** Resolve the current effective section (re-read each call → live edits apply). */
     read: () => WebToolsSettings;
-    /** Write a partial patch into the namespace; resolves when persisted. */
+    /** Persist a patch using the current Loader row revision or legacy namespace. */
     write: (patch: Partial<WebToolsSettings>) => Promise<void>;
     /**
-     * Called once the settings namespace is registered (ctx.inject callback).
-     * Use it for anything that must read persisted settings at boot — the
-     * synchronous apply() body runs BEFORE the inject callback, so reading
-     * config there would only see the defaults.
+     * Run after settings mount, immediately if already mounted.
+     * Use it for boot work that needs the settings service; reads before mount
+     * resolve the initial Loader configuration and defaults.
      */
     onMounted: (cb: () => void) => void;
 }
@@ -96,4 +95,4 @@ export interface ConfigHandle {
  * through settings/mutate (that proxy's whitelist excludes third-party
  * namespaces).
  */
-export declare function installConfig(ctx: WebToolsContext): ConfigHandle;
+export declare function installConfig(ctx: WebToolsContext, initialConfig?: unknown): ConfigHandle;

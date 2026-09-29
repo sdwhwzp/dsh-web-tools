@@ -55,14 +55,17 @@ const DSH_NM = DSH_NM_CANDIDATES.find(hasToolWeb);
 
 const load = (base, pkg) => import(pathToFileURL(`${base}/${pkg}/lib/index.js`).href);
 
+const pick = (pkg) =>
+  DSH_NM && existsSync(join(DSH_NM, pkg, "lib", "index.js")) ? DSH_NM : NM;
+
 const envReady =
   !!DSH_NM &&
-  existsSync(join(NM, "cordis", "lib", "index.js")) &&
-  existsSync(join(NM, "dsh-scope", "lib", "index.js")) &&
-  existsSync(join(NM, "dsh-tools", "lib", "index.js")) &&
-  existsSync(join(NM, "dsh-system-prompt", "lib", "index.js")) &&
-  existsSync(join(DSH_NM, "dsh-web", "lib", "index.js")) &&
-  existsSync(join(DSH_NM, "dsh-tool-web", "lib", "index.js"));
+  existsSync(join(pick("cordis"), "cordis", "lib", "index.js")) &&
+  existsSync(join(pick("dsh-scope"), "dsh-scope", "lib", "index.js")) &&
+  existsSync(join(pick("dsh-tools"), "dsh-tools", "lib", "index.js")) &&
+  existsSync(join(pick("dsh-system-prompt"), "dsh-system-prompt", "lib", "index.js")) &&
+  existsSync(join(pick("dsh-web"), "dsh-web", "lib", "index.js")) &&
+  existsSync(join(pick("dsh-tool-web"), "dsh-tool-web", "lib", "index.js"));
 
 const SKIP_REASON = envReady
   ? false
@@ -72,12 +75,12 @@ const SKIP_REASON = envReady
 // top-level imports would crash the file before `test()` gets a chance to skip.
 let rt = null;
 if (envReady) {
-  const { Context } = await load(NM, "cordis");
-  const { createScope, bindScopeParent, scopeOf } = await load(NM, "dsh-scope");
-  const { ToolRuntime } = await load(NM, "dsh-tools");
-  const { SystemPrompt } = await load(NM, "dsh-system-prompt");
-  const { WebRuntime } = await load(DSH_NM, "dsh-web");
-  const { apply: applyToolWeb, inject: toolWebInject } = await load(DSH_NM, "dsh-tool-web");
+  const { Context } = await load(pick("cordis"), "cordis");
+  const { createScope, bindScopeParent, scopeOf } = await load(pick("dsh-scope"), "dsh-scope");
+  const { ToolRuntime } = await load(pick("dsh-tools"), "dsh-tools");
+  const { SystemPrompt } = await load(pick("dsh-system-prompt"), "dsh-system-prompt");
+  const { WebRuntime } = await load(pick("dsh-web"), "dsh-web");
+  const { apply: applyToolWeb, inject: toolWebInject } = await load(pick("dsh-tool-web"), "dsh-tool-web");
   rt = { Context, createScope, bindScopeParent, scopeOf, ToolRuntime, SystemPrompt, WebRuntime, applyToolWeb, toolWebInject };
 }
 
@@ -121,9 +124,10 @@ function stubFetchProvider(id) {
   };
 }
 
-async function buildRoot() {
+async function buildRoot(t) {
   const { Context, ToolRuntime, SystemPrompt, WebRuntime, applyToolWeb, toolWebInject } = rt;
   const root = new Context();
+  t.after(async () => { await root.fiber.dispose(); });
   await root.plugin(SystemPrompt, {});
   await root.plugin(ToolRuntime, { mode: "native" });
   await root.plugin(WebRuntime, {});
@@ -137,8 +141,8 @@ async function buildRoot() {
 test(
   "preset fetch:false does NOT tombstone the global web_fetch",
   { skip: SKIP_REASON },
-  async () => {
-    const root = await buildRoot();
+  async (t) => {
+    const root = await buildRoot(t);
     const { createScope, bindScopeParent, scopeOf } = rt;
     // standing scope = the standard preset's tool-web (fetch: false)
     const standing = createScope(root, { agentPreset: "standard" });
@@ -169,15 +173,14 @@ test(
     assert.ok(view.visible.get("web_fetch") === globalLayer.tools.entries().find(([n]) => n === "web_fetch")?.[1],
       "web_fetch resolved from the global layer (no preset shadow)");
 
-    await root.stop?.();
   },
 );
 
 test(
   "a preset without tool-web (minimal) inherits the global web tools",
   { skip: SKIP_REASON },
-  async () => {
-    const root = await buildRoot();
+  async (t) => {
+    const root = await buildRoot(t);
     const { createScope, bindScopeParent, scopeOf } = rt;
     // minimal preset has NO tool-web row → its standing layer registers nothing
     const minimal = createScope(root, { agentPreset: "minimal" });
@@ -189,6 +192,5 @@ test(
     assert.ok(view.visible.has("web_search"), "minimal agent inherits web_search from global");
     assert.ok(view.visible.has("web_fetch"), "minimal agent inherits web_fetch from global — host-plane enablement leaks");
 
-    await root.stop?.();
   },
 );

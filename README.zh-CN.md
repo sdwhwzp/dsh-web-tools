@@ -4,7 +4,7 @@
 
 Web 客户端要求 Harness 0.1.7-alpha.2 或更新版本，搜索控件与设置页面使用宿主提供的共享图标。
 
-Harness 0.1.7 将搜索偏好持久化到插件 Loader 行，支持自定义行 ID；旧版宿主沿用设置命名空间。写入携带当前表单版本，缺少所属行或表单时拒绝修改。
+Harness 0.1.7+ 和 0.2 将搜索偏好持久化到插件 Loader 行，支持自定义行 ID。设置挂载前可读取 Loader 初始配置和动态 getter，后续读取跟随实时表单；注入完成后注册的挂载回调也会执行。写入携带当前表单版本，缺少所属行或表单时拒绝修改，且只有持久化成功后才生效。旧版宿主沿用设置命名空间。客户端直接使用新版图标导出，不修改宿主共享模块表。
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/A3Boy/dsh-web-tools/main/assets/logo.png" alt="dsh-web-tools" width="160" />

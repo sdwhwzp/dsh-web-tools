@@ -8,6 +8,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { pathToFileURL } from "node:url";
 import {
   SearchModeRuntime,
   createSearchModeMessages,
@@ -192,6 +193,23 @@ test("correction message is a one-shot plugin notice (not a snapshot)", () => {
   assert.equal(Object.hasOwn(input.source, "plugin"), false);
   assert.equal(input.source.form, "notice");
   assert.equal(input.source.summary, "Web Search required");
+});
+
+test("search mode messages are admitted by the installed Session V4 codec", async (t) => {
+  const base = process.env.DSH_TOOL_WEB_NM;
+  if (!base) return t.skip("set DSH_TOOL_WEB_NM to validate the installed Harness codec");
+  const { releasedV4SessionFormatCodec: codec } = await import(pathToFileURL(`${base}/dsh-session-format-v3-to-v4/lib/index.js`).href);
+  const { createUserMessage } = await import(pathToFileURL(`${base}/dsh-llm/lib/index.js`).href);
+  const messages = createSearchModeMessages(createUserMessage);
+  for (const [index, message] of [messages.required(), messages.correction()].entries()) {
+    assert.equal(message.source.kind, "plugin:dsh-web-tools");
+    assert.equal(Object.hasOwn(message.source, "plugin"), false);
+    const event = { type: "user/message", seq: index + 1, time: Date.now(), data: message };
+    assert.doesNotThrow(() => codec.encodeEvent(event));
+    assert.throws(() => codec.encodeEvent({ ...event, data: {
+      ...message, source: { ...message.source, kind: "plugin", plugin: "dsh-web-tools" },
+    } }), /source|kind|plugin/);
+  }
 });
 
 // ---- one-shot pre-step message policy --------------------------------------

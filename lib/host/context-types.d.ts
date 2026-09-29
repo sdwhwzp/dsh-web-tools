@@ -64,6 +64,10 @@ export interface WebToolsWebRuntime {
 }
 /** The settings service face (mirror of dsh-settings SettingsProvider). */
 export interface WebToolsSettingsService {
+    /** Register Loader form presentation for the owning plugin lifetime. */
+    configure?(presentation: {
+        auto?: boolean;
+    }, owner?: WebToolsContext["fiber"]): () => void;
     register?<T>(ns: string, schema: unknown, options?: {
         base?: Partial<T>;
         applies?: "live" | "restart";

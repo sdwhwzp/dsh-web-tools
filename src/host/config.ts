@@ -1,7 +1,7 @@
 /**
  * dsh-web-tools — Host configuration: settings namespace + schema.
  *
- * The config (non-secret knobs) lives on the Loader profile row in Harness 0.1.7
+ * The config (non-secret knobs) lives on the Loader profile row in Harness 0.1.7+
  * and in a `dsh-web-tools` settings namespace on older hosts. It is
  * registered through the settings service, so it persists with the deployment's
  * settings document. API keys are NOT here — they live in the credentials
@@ -107,18 +107,36 @@ export const Config: z<WebToolsSettings> = z.object({
   braveQuotaCache: z.dict(z.any()),
   searchRoutingPolicy: z.union([z.const("ordered"), z.const("round-robin"), z.const("random")]),
 });
+// Loader exposes live getter nodes instead of restarting the plugin on edits.
+Config.meta.volatile = true;
+
+function unwrapConfig(value: unknown): unknown {
+  if (value !== null && typeof value === "object") {
+    if ("get" in value && typeof value.get === "function") return unwrapConfig(value.get());
+    if (Array.isArray(value)) return value.map(unwrapConfig);
+    return Object.fromEntries(Object.entries(value).map(([key, field]) => [key, unwrapConfig(field)]));
+  }
+  return value;
+}
+
+function resolveSettings(value: unknown): WebToolsSettings {
+  const fields = unwrapConfig(value);
+  // The Loader or settings schema validates values; undefined fields keep defaults.
+  return { ...DEFAULT_SETTINGS, ...Object.fromEntries(
+    Object.entries(fields ?? {}).filter(([, field]) => field !== undefined),
+  ) };
+}
 
 /** A settings-scope handle: current value + write path. */
 export interface ConfigHandle {
   /** Resolve the current effective section (re-read each call → live edits apply). */
   read: () => WebToolsSettings;
-  /** Write a partial patch into the namespace; resolves when persisted. */
+  /** Persist a patch using the current Loader row revision or legacy namespace. */
   write: (patch: Partial<WebToolsSettings>) => Promise<void>;
   /**
-   * Called once the settings namespace is registered (ctx.inject callback).
-   * Use it for anything that must read persisted settings at boot — the
-   * synchronous apply() body runs BEFORE the inject callback, so reading
-   * config there would only see the defaults.
+   * Run after settings mount, immediately if already mounted.
+   * Use it for boot work that needs the settings service; reads before mount
+   * resolve the initial Loader configuration and defaults.
    */
   onMounted: (cb: () => void) => void;
 }
@@ -129,34 +147,37 @@ export interface ConfigHandle {
  * through settings/mutate (that proxy's whitelist excludes third-party
  * namespaces).
  */
-export function installConfig(ctx: WebToolsContext): ConfigHandle {
-  let current = () => DEFAULT_SETTINGS;
+export function installConfig(ctx: WebToolsContext, initialConfig?: unknown): ConfigHandle {
+  let current = () => resolveSettings(initialConfig);
   let scope: { update: (patch: object) => Promise<void> } | undefined;
+  let mounted = false;
   const mountedCbs: Array<() => void> = [];
 
   ctx.inject(["settings"], (sctx) => {
-    if (typeof sctx.settings.register === "function") {
-      const registered = sctx.settings.register(SETTINGS_NS, Config, { base: DEFAULT_SETTINGS });
+    const service = sctx.settings;
+    if (typeof service.register === "function") {
+      const registered = service.register(SETTINGS_NS, Config, { base: resolveSettings(initialConfig) });
       scope = registered;
-      current = () => registered.get() as WebToolsSettings;
+      current = () => resolveSettings(registered.get());
     } else {
       current = () => {
         const id = ctx.fiber?.entry?.options.id;
-        const row = id === undefined ? undefined : sctx.settings.describe().find(row => row.ns === id);
-        const value = row?.value ?? ctx.fiber?.config ?? {};
-        return { ...DEFAULT_SETTINGS, ...Object.fromEntries(
-          Object.entries(value).filter(([, field]) => field !== undefined),
-        ) };
+        const row = id === undefined ? undefined : service.describe().find(row => row.ns === id);
+        return resolveSettings(row?.value ?? ctx.fiber?.config ?? initialConfig);
       };
       scope = { update: async (patch) => {
         const id = ctx.fiber?.entry?.options.id;
         if (id === undefined) throw new Error("dsh-web-tools settings require a Loader profile entry");
-        const row = sctx.settings.describe().find(row => row.ns === id);
+        const row = service.describe().find(row => row.ns === id);
         if (row === undefined) throw new Error("dsh-web-tools profile settings form is unavailable");
-        await sctx.settings.update(id, patch, row.revision);
+        await service.update(id, patch, row.revision);
       } };
+      if (service.configure) {
+        // Own the presentation policy with the injected service lifetime.
+        sctx.effect(() => service.configure!({ auto: false }, ctx.fiber));
+      }
     }
-    // Settings are readable only from here on; run deferred boot work now.
+    mounted = true;
     for (const cb of mountedCbs.splice(0)) cb();
   });
 
@@ -166,6 +187,9 @@ export function installConfig(ctx: WebToolsContext): ConfigHandle {
       if (!scope) throw new Error("dsh-web-tools settings namespace is not mounted");
       await scope.update(patch);
     },
-    onMounted: (cb) => mountedCbs.push(cb),
+    onMounted: (cb) => {
+      if (mounted) cb();
+      else mountedCbs.push(cb);
+    },
   };
 }

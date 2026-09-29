@@ -299,4 +299,4 @@ Exa 和 Parallel 的余额需要在 Provider 控制台查看；Brave 的配额�
 
 [MIT](LICENSE) © A3Boy
 
-本 fork 在原有 peer 范围之外支持 Harness `0.2.0-rc.1`。部署时使用同一版 Harness 依赖；搜索凭据与设置继续由账号授权提供者保护。
+本 fork 在原有 peer 范围之外支持 Harness `^0.2.0-0`，运行时集成验证使用 `0.2.0-rc.1`。部署时使用同一版 Harness 依赖；搜索凭据与设置继续由账号授权提供者保护。

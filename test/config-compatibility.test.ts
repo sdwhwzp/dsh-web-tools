@@ -143,3 +143,20 @@ test("apply propagates initial Loader config into the registered provider and fo
   assert.equal(f.search()!.available(), true);
   f.dispose();
 });
+
+test("peer ranges admit Harness 0.1.7 and 0.2 while retaining the modern icon floor", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { satisfies } = await import("semver");
+  const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  for (const [name, range] of Object.entries(pkg.peerDependencies)) {
+    if (!name.startsWith("@deepseek-ai/dsh-")) continue;
+    assert.equal(typeof range, "string");
+    for (const runtime of ["0.1.7", "0.2.0-rc.1", "0.2.0"]) {
+      assert.ok(satisfies(runtime, range as string), `${name} must admit ${runtime}`);
+    }
+    assert.equal(satisfies("0.3.0", range as string), false, `${name} must exclude unadapted 0.3`);
+  }
+  const icons = pkg.peerDependencies["@deepseek-ai/dsh-client-ui-primitives"];
+  assert.ok(satisfies("0.1.7-alpha.2", icons));
+  assert.equal(satisfies("0.1.0-rc.6", icons), false);
+});

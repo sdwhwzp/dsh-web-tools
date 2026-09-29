@@ -298,3 +298,5 @@ Xiaohongshu and Twitter / X each use a dedicated local browser profile. The plug
 ## License
 
 [MIT](LICENSE) © A3Boy
+
+This fork accepts Harness `0.2.0-rc.1` alongside its existing peer ranges. Deploy Harness peers from one runtime release; search credentials and settings remain protected by the account authorization provider.

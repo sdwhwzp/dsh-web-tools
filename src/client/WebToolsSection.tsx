@@ -17,16 +17,20 @@ import { PUBLIC_PLATFORMS } from "../shared/search-policy.ts";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Button,
-  IconSearchOutlineRegular,
-  IconEditOutlineRegular,
-  IconSettingsOutlineRegular,
   Input,
   StateDot,
 } from "@deepseek-ai/dsh-client-ui-primitives";
+import {
+  IconSearchOutline16,
+  IconEditOutline16,
+  IconSettingsOutline16,
+} from "./icons.ts";
 import { api, type ConfigView, type QuotaView, type TestProviderView, type TestSearchView, type ProviderView, type SearchRoutingPolicy, type VersionCheckView, type PlatformStatusResponse } from "./api.ts";
 import { arePlatformStatusesEqual, getPlatformPollIntervalMs } from "./platform-polling.ts";
 import { RemoteLoginModal } from "./RemoteLoginModal.tsx";
 import { platformLoginMessage } from "./platform-login.ts";
+import { applyRoutingResult, createReadSequencer, routingFields } from "./routing-state.ts";
+import { CURRENT_VERSION } from "../shared/version.ts";
 import { text, surface, state as stateColor, button as buttonColor } from "./theme.ts";
 import { ProviderModal } from "./ProviderModal.tsx";
 import { ExternalLinkIcon, PROVIDER_CAPABILITY_KEY } from "./provider-ui-meta.tsx";
@@ -174,10 +178,26 @@ function ProviderRow(props: {
     </div>
   );
 
+  // In edit mode the chain control IS the affordance. Showing the
+  // "not in search order" label next to the "add to search order" button is
+  // redundant, reads as a second (dead) control, and — because it is a rigid
+  // 220px block — used to push the real button out of the card's clipped area.
+  // Genuine anomalies (auth/rate-limit/unreachable) keep their label.
+  const showStatusText = status !== "ready" && !(editMode === true && status === "not-in-order");
+
   const trailing = (
-    <div style={{ display: "inline-flex", alignItems: "center", gap: 12 }}>
-      {status !== "ready" ? (
-        <div style={{ width: 220, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6 }}>
+    <div style={{ display: "inline-flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+      {editMode === true ? (
+        showStatusText ? (
+          <div style={{ minWidth: 0, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6 }}>
+            {dotState !== "none" && <StateDot state={dotState} size={8} />}
+            <span style={{ color: statusColor, fontSize: 12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {statusText}
+            </span>
+          </div>
+        ) : null
+      ) : status !== "ready" ? (
+        <div style={{ width: 220, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6 }}>
           {dotState !== "none" && <StateDot state={dotState} size={8} />}
           <span style={{ color: statusColor, fontSize: 12, whiteSpace: "nowrap" }}>
             {statusText}
@@ -217,7 +237,7 @@ function ProviderRow(props: {
         </button>
       )}
       {editMode && !inOrder && (
-        <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); onAdd?.(); }} style={{ padding: "0 8px", height: 24 }}>
+        <Button size="sm" variant="outline" onClick={() => onAdd?.()} style={{ padding: "0 8px", height: 24, flex: "none" }}>
           {t("addToChain")}
         </Button>
       )}
@@ -254,6 +274,8 @@ function ProviderRow(props: {
       }}
     >
       <SettingsRow
+        className="wt-provider-row"
+        trailingClassName="wt-provider-meta"
         icon={brandIcon}
         title={titleWithBadge}
         subtitle={t(PROVIDER_CAPABILITY_KEY[p.name] ?? "capability.search")}
@@ -302,7 +324,7 @@ function TestSearchBlock(props: { t: TFunc; config: ConfigView; onError: (msg: s
         <div style={{ flex: 1, minWidth: 0 }}>
           <Input
             value={query}
-            icon={<IconSearchOutlineRegular size={14} />}
+            icon={<IconSearchOutline16 size={14} />}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t("searchPlaceholder")}
             onKeyDown={(e) => { if (e.key === "Enter") void run(); }}
@@ -413,8 +435,19 @@ export function WebToolsSection(props: SectionProps) {
   const [timeoutDraftSec, setTimeoutDraftSec] = useState<string>("");
   const dragProvider = useRef<string | null>(null);
   const [overProvider, setOverProvider] = useState<string | null>(null);
-  const loadToken = useRef(0);
+  const readSeq = useRef(createReadSequencer());
   const mounted = useRef(true);
+  /** Mirror of the latest rendered config, for handlers that must not read a stale closure. */
+  const configRef = useRef<ConfigView | null>(null);
+  configRef.current = config;
+  /** Monotonic id of the newest routing edit, so only the last intent settles the view. */
+  const orderWriteSeq = useRef(0);
+  /** Newest routing intent not yet confirmed by the Host (see saveOrder). */
+  const pendingOrder = useRef<import("./routing-state.ts").RoutingWriteResult | null>(null);
+  /** Whether a routing write is currently in flight. */
+  const orderWriteInFlight = useRef(false);
+  /** True while a routing edit is being persisted in the background. */
+  const [savingOrder, setSavingOrder] = useState(false);
 
   useEffect(() => {
     if (config?.providerAttemptTimeoutMs !== undefined) {
@@ -444,14 +477,22 @@ export function WebToolsSection(props: SectionProps) {
   };
 
   const load = async () => {
-    const token = ++loadToken.current;
+    const seq = readSeq.current.begin();
     try {
       const cfg = await api.configGet();
-      if (token !== loadToken.current) return;
-      setConfig(cfg);
+      if (!mounted.current) return;
+      // Apply unless a NEWER read has already landed. Discarding merely because
+      // a newer read STARTED silently loses the update and leaves the card
+      // stale until it is reopened.
+      if (!readSeq.current.accept(seq)) return;
+      // Keep an un-confirmed routing edit on top: the write takes seconds, and
+      // a read landing inside that window would otherwise repaint the old order.
+      setConfig(pendingOrder.current ? applyRoutingResult(cfg, pendingOrder.current) : cfg);
       setError("");
     } catch (e) {
-      if (token === loadToken.current) setError(e instanceof Error ? e.message : String(e));
+      if (mounted.current && readSeq.current.accept(seq)) {
+        setError(e instanceof Error ? e.message : String(e));
+      }
     }
 
     await loadPlatformStatus();
@@ -468,6 +509,11 @@ export function WebToolsSection(props: SectionProps) {
   };
 
   useEffect(() => {
+    // Re-arm on every mount: the cleanup below clears this flag, and React
+    // StrictMode double-invokes effects (mount → cleanup → mount), which would
+    // otherwise leave it permanently false and silently disable platform
+    // status + quota updates.
+    mounted.current = true;
     void load();
     void loadQuotas();
     void api.versionCheck().then(setVersionInfo).catch(() => {});
@@ -506,7 +552,6 @@ export function WebToolsSection(props: SectionProps) {
       if (typeof document !== "undefined") {
         document.removeEventListener("visibilitychange", onVisibilityChange);
       }
-      loadToken.current += 1;
       mounted.current = false;
     };
   }, []);
@@ -575,9 +620,76 @@ export function WebToolsSection(props: SectionProps) {
     ...config.fallbackOrder.filter((n) => n !== config.defaultProvider),
   ];
   const providerOf = (name: string) => config.providers.find((p) => p.name === name);
-  const saveOrder = (ordered: string[], policy: SearchRoutingPolicy = config.searchRoutingPolicy ?? "ordered") => {
-    const next = ordered.filter((n, i) => ordered.indexOf(n) === i);
-    void api.routingSet(policy, next).then(() => load()).catch((e) => setError(e instanceof Error ? e.message : String(e)));
+
+  /**
+   * Latest routing order read from the live config, not this render's closure,
+   * so rapid successive edits compose instead of overwriting each other.
+   */
+  const liveOrder = (): string[] => {
+    const c = configRef.current;
+    if (!c) return [];
+    return [c.defaultProvider, ...c.fallbackOrder.filter((n) => n !== c.defaultProvider)];
+  };
+
+  /**
+   * Persist a routing edit.
+   *
+   * The DSH settings write edits the profile patch and recomposes the profile,
+   * which measures in SECONDS (routing/set ~2.4-3.9s against config/get
+   * ~11-57ms). Two consequences shape this:
+   *
+   *  - painting only after the response makes the control feel dead, so the new
+   *    order is applied locally at once and the write runs behind it, and
+   *  - a read completing inside that multi-second window would otherwise
+   *    repaint the OLD order and visibly undo the edit, so the un-confirmed
+   *    intent is held in `pendingOrder` and re-applied over every read until the
+   *    write settles.
+   *
+   * Writes are drained one at a time; a newer edit replaces the pending intent
+   * instead of racing a second multi-second recomposition.
+   */
+  const saveOrder = (ordered: readonly string[], policy: SearchRoutingPolicy = config.searchRoutingPolicy ?? "ordered") => {
+    const fields = routingFields(ordered, policy);
+    ++orderWriteSeq.current;
+    pendingOrder.current = fields;
+
+    setConfig((prev) => applyRoutingResult(prev, fields));
+    setError("");
+    setSavingOrder(true);
+    drainOrderWrites();
+  };
+
+  /** Send the pending routing intent, then drain again if another arrived. */
+  const drainOrderWrites = () => {
+    if (orderWriteInFlight.current) return; // the in-flight settle drains next
+    const fields = pendingOrder.current;
+    if (!fields) {
+      setSavingOrder(false);
+      return;
+    }
+    const seq = orderWriteSeq.current;
+    orderWriteInFlight.current = true;
+
+    void api
+      .routingSet(fields.policy, [fields.defaultProvider, ...fields.fallbackOrder])
+      .then((result) => {
+        if (seq !== orderWriteSeq.current) return; // a newer intent owns the view
+        pendingOrder.current = null;
+        setConfig((prev) => applyRoutingResult(prev, result));
+        setError("");
+      })
+      .catch((e) => {
+        setError(e instanceof Error ? e.message : String(e));
+        if (seq !== orderWriteSeq.current) return;
+        // Roll the optimistic order back to what the Host actually holds.
+        pendingOrder.current = null;
+        void load();
+      })
+      .finally(() => {
+        orderWriteInFlight.current = false;
+        if (pendingOrder.current) drainOrderWrites();
+        else setSavingOrder(false);
+      });
   };
 
   // Rendering order: providers are listed in the routing order (default +
@@ -611,10 +723,15 @@ export function WebToolsSection(props: SectionProps) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: 720, padding: "4px 0 24px" }}>
-      {/* Narrow-width responsive rules: provider rows wrap to two lines. */}
+      {/* Narrow-width responsive rules: provider rows wrap to two lines.
+          The wrap is unconditional (it only engages when the row's own content
+          cannot fit) because a narrow settings PANE can occur inside a wide
+          viewport, where a viewport media query would never match — and the
+          group card clips overflow, which would hide the chain buttons. */}
       <style>{`
+        .wt-provider-row { flex-wrap: wrap; row-gap: 4px; }
+        .wt-provider-meta { flex: 0 1 auto; min-width: 0; }
         @media (max-width: 640px) {
-          .wt-provider-row { flex-wrap: wrap; row-gap: 4px; }
           .wt-provider-meta { flex-basis: 100%; order: 10; padding-left: 22px; }
         }
       `}</style>
@@ -713,9 +830,14 @@ export function WebToolsSection(props: SectionProps) {
               </span>
             }
             trailing={
-              <Button size="sm" variant={editingOrder ? "primary" : "outline"} icon={!editingOrder ? <IconEditOutlineRegular size={13} /> : undefined} onClick={() => setEditingOrder(!editingOrder)}>
-                {editingOrder ? t("done") : t("editOrder")}
-              </Button>
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+                {/* The order repaints instantly; this only reports that the
+                    (slow) profile write behind it is still in flight. */}
+                {savingOrder && <span style={{ color: text.tertiary, fontSize: 12 }}>{t("saving")}</span>}
+                <Button size="sm" variant={editingOrder ? "primary" : "outline"} icon={!editingOrder ? <IconEditOutline16 size={13} /> : undefined} onClick={() => setEditingOrder(!editingOrder)}>
+                  {editingOrder ? t("done") : t("editOrder")}
+                </Button>
+              </div>
             }
             isLast
           />
@@ -774,7 +896,7 @@ export function WebToolsSection(props: SectionProps) {
                   { value: "random", label: t("routingPolicy.random") },
                 ]}
                 value={config.searchRoutingPolicy ?? "ordered"}
-                onChange={(v) => saveOrder(orderedProviders, v as SearchRoutingPolicy)}
+                onChange={(v) => saveOrder(liveOrder(), v as SearchRoutingPolicy)}
               />
               <div style={{ marginTop: 8, fontSize: 12, color: text.tertiary }}>
                 {t(`routingPolicyHint.${config.searchRoutingPolicy ?? "ordered"}`)}
@@ -939,8 +1061,8 @@ export function WebToolsSection(props: SectionProps) {
                   setOverProvider(null);
                   if (!fromName || fromName === p.name) return;
 
-                  // Compute next order
-                  const currentOrderList = [...orderedProviders];
+                  // Compute next order from the LIVE order so rapid edits compose
+                  const currentOrderList = [...liveOrder()];
                   const fromIdx = currentOrderList.indexOf(fromName);
                   const toIdx = currentOrderList.indexOf(p.name);
 
@@ -958,11 +1080,12 @@ export function WebToolsSection(props: SectionProps) {
                   setOverProvider(null);
                 }}
                 onRemove={() => {
-                  const next = orderedProviders.filter((n) => n !== p.name);
+                  const next = liveOrder().filter((n) => n !== p.name);
                   if (next.length > 0) saveOrder(next);
                 }}
                 onAdd={() => {
-                  if (!orderedProviders.includes(p.name)) saveOrder([...orderedProviders, p.name]);
+                  const current = liveOrder();
+                  if (!current.includes(p.name)) saveOrder([...current, p.name]);
                 }}
                 onClick={() => setDetailFor(p.name)}
               />
@@ -977,7 +1100,7 @@ export function WebToolsSection(props: SectionProps) {
           <SettingsRow
             icon={
               <div style={{ display: "inline-flex", alignItems: "center", color: text.secondary }}>
-                <IconSettingsOutlineRegular size={16} />
+                <IconSettingsOutline16 size={16} />
               </div>
             }
             title={t("diagnosticsAndMore")}
@@ -1028,6 +1151,17 @@ export function WebToolsSection(props: SectionProps) {
             <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingTop: 10, borderTop: `1px solid ${surface.border}` }}>
               <span style={{ fontSize: 13, fontWeight: 500, color: text.primary }}>{t("testSearchTitle")}</span>
               <TestSearchBlock t={t} config={config} onError={(msg) => setError(msg)} />
+            </div>
+
+            {/* Bundle identity. The web shell serves client bundles as
+                immutable, cache-busted by a revision derived from the file's
+                mtime/size, so a page can keep running an older bundle. Showing
+                the version compiled into THIS bundle makes that visible. */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 2, paddingTop: 10, borderTop: `1px solid ${surface.border}` }}>
+              <span style={{ fontSize: 13, color: text.primary }}>
+                {t("clientBundleLabel")}: <code style={{ fontFamily: "ui-monospace, monospace" }}>v{CURRENT_VERSION}</code>
+              </span>
+              <span style={{ fontSize: 12, color: text.tertiary }}>{t("clientBundleHint")}</span>
             </div>
           </div>
         )}

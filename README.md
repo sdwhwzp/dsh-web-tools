@@ -299,4 +299,4 @@ Xiaohongshu and Twitter / X each use a dedicated local browser profile. The plug
 
 [MIT](LICENSE) © A3Boy
 
-This fork accepts Harness `^0.2.0-0` alongside its existing peer ranges; runtime integration is verified against `0.2.0-rc.1`. Deploy Harness peers from one runtime release; search credentials and settings remain protected by the account authorization provider.
+This fork accepts Harness `^0.2.0-0` and the exact `0.2.1-alpha.1` preview alongside its existing peer ranges. Client icons resolve from the read-only platform exports, and provider-order edits remain visible while their settings writes complete. Deploy Harness peers from one runtime release; search credentials and settings remain protected by the account authorization provider.

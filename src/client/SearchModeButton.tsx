@@ -21,7 +21,7 @@
  * @module
  */
 import { useEffect, useRef, useState } from "react";
-import { IconGlobeOutlineRegular } from "@deepseek-ai/dsh-client-ui-primitives";
+import { IconGlobeOutline14 } from "./icons.ts";
 import { api, type SearchMode } from "./api.ts";
 import { searchModeCss, adoptSearchModeStyles } from "./SearchModeButton.css.ts";
 
@@ -166,7 +166,7 @@ export function SearchModeButton({
       }}
     >
       <span className={searchModeCss.icon} aria-hidden>
-        <IconGlobeOutlineRegular size={14} />
+        <IconGlobeOutline14 size={14} />
       </span>
       <span className={searchModeCss.label}>{label}</span>
     </button>

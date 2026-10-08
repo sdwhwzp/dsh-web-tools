@@ -1,6 +1,6 @@
 {
   "name": "dsh-web-tools",
-  "version": "0.4.0-dev.7-dsh.20260929.3",
+  "version": "0.4.0-dev.7-dsh.20261008.1",
   "description": "Unified free and API web search for DeepSeek Harness, with account-aware routing, platform search and page extraction",
   "author": "A3Boy",
   "license": "MIT",
@@ -36,9 +36,7 @@
       "inject": [
         "@deepseek-ai/dsh-client-connection",
         "@deepseek-ai/dsh-client-locale",
-        "@deepseek-ai/dsh-client-runtime",
         "@deepseek-ai/dsh-client-ui-settings",
-        "@deepseek-ai/dsh-client-ui-slots",
         "@deepseek-ai/dsh-api-remotes"
       ]
     }
@@ -52,17 +50,16 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
-    "@deepseek-ai/dsh-api-remotes": "^0.1.0-rc.6 || ^0.2.0-0",
-    "@deepseek-ai/dsh-client-connection": "^0.1.0-rc.6 || ^0.2.0-0",
-    "@deepseek-ai/dsh-client-locale": "^0.1.0-rc.6 || ^0.2.0-0",
-    "@deepseek-ai/dsh-client-runtime": "^0.1.0-rc.6 || ^0.2.0-0",
-    "@deepseek-ai/dsh-client-ui-primitives": "^0.1.7-alpha.2 || ^0.2.0-0",
-    "@deepseek-ai/dsh-client-ui-settings": "^0.1.0-rc.6 || ^0.2.0-0",
-    "@deepseek-ai/dsh-client-ui-slots": "^0.1.0-rc.6 || ^0.2.0-0",
-    "@deepseek-ai/dsh-credentials": "^0.1.0-rc.6 || ^0.2.0-0",
-    "@deepseek-ai/dsh-llm": "^0.1.0-rc.6 || ^0.2.0-0",
-    "@deepseek-ai/dsh-settings": "^0.1.0-rc.6 || ^0.2.0-0",
-    "@deepseek-ai/dsh-web": "^0.1.0-rc.6 || ^0.2.0-0",
+    "@deepseek-ai/dsh-api-remotes": "^0.1.0-rc.6 || ^0.2.0-0 || 0.2.1-alpha.1",
+    "@deepseek-ai/dsh-client-connection": "^0.1.0-rc.6 || ^0.2.0-0 || 0.2.1-alpha.1",
+    "@deepseek-ai/dsh-client-locale": "^0.1.0-rc.6 || ^0.2.0-0 || 0.2.1-alpha.1",
+    "@deepseek-ai/dsh-client-ui-primitives": "^0.1.7-alpha.2 || ^0.2.0-0 || 0.2.1-alpha.1",
+    "@deepseek-ai/dsh-client-ui-settings": "^0.1.0-rc.6 || ^0.2.0-0 || 0.2.1-alpha.1",
+    "@deepseek-ai/dsh-client-ui-slots": "^0.1.0-rc.6 || ^0.2.0-0 || 0.2.1-alpha.1",
+    "@deepseek-ai/dsh-credentials": "^0.1.0-rc.6 || ^0.2.0-0 || 0.2.1-alpha.1",
+    "@deepseek-ai/dsh-llm": "^0.1.0-rc.6 || ^0.2.0-0 || 0.2.1-alpha.1",
+    "@deepseek-ai/dsh-settings": "^0.1.0-rc.6 || ^0.2.0-0 || 0.2.1-alpha.1",
+    "@deepseek-ai/dsh-web": "^0.1.0-rc.6 || ^0.2.0-0 || 0.2.1-alpha.1",
     "@deepseek-ai/schemastery": "^3.18.1",
     "react": "^18.2.0"
   },
@@ -79,10 +76,10 @@
     "@types/node": "^22.10.0",
     "@types/react": "~18.3.31",
     "@types/ws": "^8.5.14",
+    "semver": "^7.8.5",
     "tsdown": "^0.22.14",
     "typescript": "^5.9.3",
     "@deepseek-ai/dsh-client-ui-primitives": "0.1.7-alpha.2",
-    "semver": "7.7.3",
     "@types/semver": "7.7.1"
   },
   "repository": {

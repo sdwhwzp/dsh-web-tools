@@ -30,18 +30,31 @@ const NODE_BUILTINS = new Set([
   ...builtinModules.map(id => `node:${id}`),
 ])
 
-/** Module specifiers the web shell shares into the frozen module table (the official PLATFORM_MODULES list, plus the runtime/client exemption). */
+/**
+ * Module specifiers the web shell seeds into its module table. This is the
+ * ACTUAL seed key set, taken from the served shell bundle's
+ * `staticModules` (`dsh-web-frontend/dist/assets/index-*.js`), which the loader
+ * installs verbatim as `new Map(Object.entries(options.staticModules))`.
+ *
+ * The previous list was inaccurate in both directions: it allowed four
+ * specifiers that are not table keys (`cordis` — the key is
+ * `@deepseek-ai/cordis` — plus dsh-client-web-react, dsh-client-schema-form and
+ * dsh-client-runtime/client, three packages that are not even published), and
+ * it omitted two real keys (dsh-client-store, dsh-client-ui-dockkit). An
+ * allowed-but-absent specifier compiles into a bare `require(...)` that throws
+ * the loader's "missed the module table" error at load, while an omitted-but-real
+ * key is rejected here at build time — so the list is only useful when it matches.
+ */
 const CLIENT_EXTERNALS = [
   'react',
   'react/jsx-runtime',
   'react-dom',
   'react-dom/client',
-  'cordis',
+  '@deepseek-ai/cordis',
+  '@deepseek-ai/dsh-client-store',
   '@deepseek-ai/dsh-client-ui-slots',
-  '@deepseek-ai/dsh-client-web-react',
   '@deepseek-ai/dsh-client-ui-primitives',
-  '@deepseek-ai/dsh-client-schema-form',
-  '@deepseek-ai/dsh-client-runtime/client',
+  '@deepseek-ai/dsh-client-ui-dockkit',
 ]
 
 /** Wire/type layers a client bundle may inline (mirror of the official INLINE_SAFE list). */
@@ -110,7 +123,7 @@ export default [
       entryFileNames: 'client.js',
       banner: `window.__ModuleLoader__.load({ id: "dsh-web-tools", factory: (require) => {`,
       footer: `return module.exports; } });`,
-      intro: 'var module = { exports: {} }; var exports = module.exports;',
+      intro: `var module = { exports: {} }; var exports = module.exports;`,
       // The CJS wrapper factory's `require` only resolves module-table entries
       // (react, cordis, ...); it cannot load relative chunk URLs in the
       // browser. Disable code splitting so the artifact is one script.

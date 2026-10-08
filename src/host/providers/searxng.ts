@@ -20,6 +20,28 @@ export const SEARXNG_META = {
 } as const;
 
 /**
+ * A SearXNG credential written `user:password` means HTTP Basic — the form
+ * that reverse proxies guarding a self-hosted instance require, and the one
+ * the retired dsh-search-failover backend accepted. Anything else is passed
+ * on as the `api_key` query parameter.
+ *
+ * Basic is NOT optional here: `api_key` in the query string cannot satisfy a
+ * proxy, and `fetch()` refuses a URL carrying userinfo
+ * ("Request cannot be constructed from a URL that includes credentials"), so
+ * there is no config-only workaround.
+ */
+export function buildSearxngAuth(apiKey?: string): {
+  headers: Record<string, string>;
+  queryKey?: string;
+} {
+  if (!apiKey) return { headers: {} };
+  const separator = apiKey.indexOf(":");
+  if (separator <= 0) return { headers: {}, queryKey: apiKey };
+  const encoded = Buffer.from(apiKey, "utf8").toString("base64");
+  return { headers: { authorization: `Basic ${encoded}` } };
+}
+
+/**
  * Build SearXNG URL parameters based on query, options, and SearchHints.
  * Maps:
  *  - topic=code → categories=it
@@ -41,7 +63,8 @@ export function buildSearxngUrl(
   url.searchParams.set("q", cleanQ);
   url.searchParams.set("format", "json");
   url.searchParams.set("safesearch", "0");
-  if (apiKey) url.searchParams.set("api_key", apiKey);
+  const { queryKey } = buildSearxngAuth(apiKey);
+  if (queryKey) url.searchParams.set("api_key", queryKey);
 
   // 1. Categories
   if (hints?.topic === "code") {
@@ -97,7 +120,8 @@ export const SearxngProvider: ProviderAdapter = {
 
 async function searchInstance(instanceUrl: string, query: string, maxResults: number, apiKey: string, hints: Readonly<SearchHints> | undefined, signal: AbortSignal): Promise<SearchOutcome> {
   const url = buildSearxngUrl(instanceUrl, query, apiKey, hints);
-  const raw = record(await searchJson(url.href, { signal }));
+  const { headers } = buildSearxngAuth(apiKey);
+  const raw = record(await searchJson(url.href, { signal, headers }));
   const sources = normalizeSources(records(raw.results).map((result) => ({
     url: string(result.url), title: string(result.title), snippet: string(result.content),
   })), maxResults ?? 8);

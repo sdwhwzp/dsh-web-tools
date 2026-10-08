@@ -151,7 +151,7 @@ test("peer ranges admit Harness 0.1.7 and 0.2 while retaining the modern icon fl
   for (const [name, range] of Object.entries(pkg.peerDependencies)) {
     if (!name.startsWith("@deepseek-ai/dsh-")) continue;
     assert.equal(typeof range, "string");
-    for (const runtime of ["0.1.7", "0.2.0-rc.1", "0.2.0"]) {
+    for (const runtime of ["0.1.7", "0.2.0-rc.1", "0.2.0", "0.2.1-alpha.1"]) {
       assert.ok(satisfies(runtime, range as string), `${name} must admit ${runtime}`);
     }
     assert.equal(satisfies("0.3.0", range as string), false, `${name} must exclude unadapted 0.3`);

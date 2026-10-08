@@ -7,7 +7,14 @@
  * @module
  */
 import { useState, useRef, type CSSProperties } from "react";
-import { Button, IconChevronRightOutlineRegular, IconPlusOutlineRegular, IconTrashOutlineRegular, IconCloseOutlineRegular, IconSettingsOutlineRegular, Modal, StateDot } from "@deepseek-ai/dsh-client-ui-primitives";
+import { Button, Modal, StateDot } from "@deepseek-ai/dsh-client-ui-primitives";
+import {
+  IconChevronRightOutline14,
+  IconPlusOutline16,
+  IconTrashOutline16,
+  IconCloseOutline16,
+  IconSettingsOutline16,
+} from "./icons.ts";
 import { api, type ProviderView, type QuotaView, type TestProviderView } from "./api.ts";
 import { text, surface, state as stateColor } from "./theme.ts";
 import { Switch, type TFunc } from "./WebToolsSection.tsx";
@@ -211,7 +218,7 @@ function CredentialDisclosure(props: {
         </div>
         <div className="dswt-row-chevron">
           <span style={{ transform: open ? "rotate(90deg)" : "none", transition: "transform .15s ease", display: "inline-flex" }}>
-            <IconChevronRightOutlineRegular size={14} />
+            <IconChevronRightOutline14 size={14} />
           </span>
         </div>
       </button>
@@ -289,7 +296,7 @@ function CredentialList(props: {
                 </Button>
               </div>
             ) : (
-              <Button size="sm" variant="ghost" icon={<IconTrashOutlineRegular size={14} />} onClick={() => setConfirmKeyId(k.id)} disabled={busyKey === k.id} aria-label={t("removeKey")} />
+              <Button size="sm" variant="ghost" icon={<IconTrashOutline16 size={14} />} onClick={() => setConfirmKeyId(k.id)} disabled={busyKey === k.id} aria-label={t("removeKey")} />
             )}
           </div>
         </div>
@@ -305,7 +312,7 @@ function CredentialList(props: {
         </div>
       ) : (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 4 }}>
-          <Button size="sm" variant="outline" icon={<IconPlusOutlineRegular size={14} />} onClick={() => setAdding(true)}>{t("addKey")}</Button>
+          <Button size="sm" variant="outline" icon={<IconPlusOutline16 size={14} />} onClick={() => setAdding(true)}>{t("addKey")}</Button>
           <Button size="sm" variant="ghost" onClick={onTest} disabled={busy || keys.length === 0}>
             {busy ? t("testingConnection") : t("testConnection")}
           </Button>
@@ -356,7 +363,7 @@ function ConnectionSettingsDisclosure(props: {
         </div>
         <div className="dswt-row-chevron">
           <span style={{ transform: open ? "rotate(90deg)" : "none", transition: "transform .15s ease", display: "inline-flex" }}>
-            <IconChevronRightOutlineRegular size={14} />
+            <IconChevronRightOutline14 size={14} />
           </span>
         </div>
       </button>
@@ -465,7 +472,7 @@ export function ProviderModal(props: Props) {
               aria-label={t("close")}
               className="dswt-modal-close-btn"
             >
-              <IconCloseOutlineRegular size={16} />
+              <IconCloseOutline16 size={16} />
             </button>
           </div>
         </div>
@@ -577,7 +584,7 @@ export function ProviderModal(props: Props) {
           <SettingsRow
             icon={
               <div style={{ display: "inline-flex", alignItems: "center", color: text.secondary }}>
-                <IconSettingsOutlineRegular size={16} />
+                <IconSettingsOutline16 size={16} />
               </div>
             }
             title={t("advancedSettingsTitle")}

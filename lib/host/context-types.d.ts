@@ -58,10 +58,6 @@ export interface WebToolsWebServer {
     readonly port?: number;
     readonly host?: string;
 }
-/** The web runtime face (trusted hosts list for the browser fence). */
-export interface WebToolsWebRuntime {
-    trustedHosts: readonly string[];
-}
 /** The settings service face (mirror of dsh-settings SettingsProvider). */
 export interface WebToolsSettingsService {
     /** Register Loader form presentation for the owning plugin lifetime. */
@@ -160,7 +156,6 @@ export interface WebToolsContext {
         config?: Record<string, unknown>;
     };
     webServer: WebToolsWebServer;
-    webRuntime: WebToolsWebRuntime;
     settings: WebToolsSettingsService;
     credentials: WebToolsCredentialsService;
     web: WebToolsWebSeam;

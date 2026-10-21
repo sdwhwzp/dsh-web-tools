@@ -65,11 +65,6 @@ export interface WebToolsWebServer {
   readonly host?: string;
 }
 
-/** The web runtime face (trusted hosts list for the browser fence). */
-export interface WebToolsWebRuntime {
-  trustedHosts: readonly string[];
-}
-
 /** The settings service face (mirror of dsh-settings SettingsProvider). */
 export interface WebToolsSettingsService {
   /** Register Loader form presentation for the owning plugin lifetime. */
@@ -142,7 +137,6 @@ export interface WebToolsContext {
   /** Current Loader-owned config and entry for Harness 0.1.7 forms. */
   fiber?: { entry?: { options: { id: string } }; config?: Record<string, unknown> };
   webServer: WebToolsWebServer;
-  webRuntime: WebToolsWebRuntime;
   settings: WebToolsSettingsService;
   credentials: WebToolsCredentialsService;
   web: WebToolsWebSeam;

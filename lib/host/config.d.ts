@@ -15,6 +15,8 @@ import type { StoredProviderOptions } from "../shared/provider-options.ts";
 import type { SearchRoutingPolicy } from "../shared/api-types.ts";
 import type { SearchAccessMode } from "../shared/search-policy.ts";
 import { type BrowserSettings } from "./browser/remote-login.ts";
+import type { CustomProviderConfig } from "../shared/custom-provider-types.ts";
+import type { OutboundAuthorization } from "./provider-transport.ts";
 /** Persistent search routing policy id (shared with the client card). */
 export type ToolSearchRoutingPolicy = SearchRoutingPolicy;
 /** Settings namespace for this plugin. */
@@ -45,6 +47,9 @@ export declare const DEFAULT_SETTINGS: {
     providerOptions: StoredProviderOptions;
     braveQuotaCache: Record<string, QuotaSnapshot>;
     searchRoutingPolicy: ToolSearchRoutingPolicy;
+    customProviders: CustomProviderConfig[];
+    /** Operator-granted outbound destinations for internal gateways / private IPs. */
+    outboundAuthorizations: OutboundAuthorization[];
     browserExecutable: string;
     browserDisplay: string;
     browserXauthority: string;
@@ -73,6 +78,10 @@ export interface WebToolsSettings extends BrowserSettings {
     braveQuotaCache: Record<string, QuotaSnapshot>;
     /** Search routing policy (see shared api-types). */
     searchRoutingPolicy: ToolSearchRoutingPolicy;
+    /** Operator-defined custom search sources (Issue #9). */
+    customProviders: CustomProviderConfig[];
+    /** Operator-granted outbound destinations for internal gateways / private IPs. */
+    outboundAuthorizations?: OutboundAuthorization[];
 }
 /** The schema object for settings registration (official z<T> annotation). */
 export declare const Config: z<WebToolsSettings>;
@@ -89,6 +98,14 @@ export interface ConfigHandle {
      */
     onMounted: (cb: () => void) => void;
 }
+/**
+ * Keep only usable base-URL overrides.
+ *
+ * A malformed override must never reach an adapter: an entry that is not an
+ * absolute http(s) URL is dropped (which restores the official endpoint) rather
+ * than being passed down and failing at request time.
+ */
+export declare function sanitizeBaseUrlOverrides(value: unknown): Record<string, string>;
 /**
  * Register the settings namespace; returns a handle for reads (live) and
  * Host-side writes. The browser card writes through the fenced routes, never

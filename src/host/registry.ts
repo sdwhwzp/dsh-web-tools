@@ -12,7 +12,7 @@ import { classifyFailure, fallbackChain } from "./fallback.ts";
 import { resolveSearchChain, type SearchRoutingPolicy, type SearchRoutingState } from "./routing-policy.ts";
 import { buildPool, markUnhealthy, markUsed, reserveKey, releaseKey, selectIndex, PoolEntry } from "./pool.ts";
 import { PROVIDERS } from "./providers/index.ts";
-import { searchAuthentication, type ProviderError, type ProviderErrorCode } from "./providers/types.ts";
+import { isKeylessSelfHosted, searchAuthentication, type ProviderError, type ProviderErrorCode } from "./providers/types.ts";
 import type { SearchAccessMode, SearchAuthentication } from "../shared/search-policy.ts";
 import { searchAttempts } from "./search-access.ts";
 import { SearchCache, searchCacheKey } from "./search-cache.ts";
@@ -21,6 +21,7 @@ import type { StoredProviderOptions } from "../shared/provider-options.ts";
 import { extractSearchHints } from "./search-hints.ts";
 import type { ProviderHealthStore } from "./provider-health.ts";
 import { fetchGenericWebPage, GenericFetchError } from "./generic-fetch.ts";
+import type { CatalogEntry, ProviderSnapshot } from "./custom-provider-registry.ts";
 
 /** Stable provider id registered on ctx.web (the `web` row's searchProvider). */
 export const PROVIDER_ID = "dsh-web-tools";
@@ -120,7 +121,18 @@ export function createPoolStore(resolveKeys: (providerName: string) => Promise<s
     return next;
   }
 
-  return { poolOf };
+  /**
+   * Drop one source's pool entirely.
+   *
+   * Used when a source is deleted or its credential/endpoint identity changes:
+   * the cached entries (and any per-key health they carry) no longer describe
+   * anything real. Other sources' pools are untouched.
+   */
+  function forget(providerName: string): void {
+    slots.delete(providerName);
+  }
+
+  return { poolOf, forget };
 }
 
 export type PoolStore = ReturnType<typeof createPoolStore>;
@@ -137,7 +149,12 @@ export interface ProviderAdapterLike {
 
 /** Build a WebToolsSearchProvider for `ctx.web.registerSearchProvider`.
  *  `adapterRegistry` is injectable for tests; production uses the global
- *  PROVIDERS map (passed by index.ts via the default). */
+ *  PROVIDERS map (passed by index.ts via the default).
+ *
+ *  `resolveSnapshot` is the Issue #9 seam: when supplied, EVERY request reads
+ *  one immutable catalog snapshot up front and takes adapters, credentials,
+ *  endpoint overrides and keyless-ness from it. A config edit mid-flight can
+ *  therefore never swap an adapter out from under the request. */
 export function createSearchProvider(
   resolveConfig: () => WebToolsRuntimeConfig,
   resolveKeys: (providerName: string) => Promise<string>,
@@ -147,10 +164,24 @@ export function createSearchProvider(
   adapterRegistry: Record<string, ProviderAdapterLike> = PROVIDERS,
   poolStore?: PoolStore,
   healthStore?: ProviderHealthStore,
+  resolveSnapshot?: () => ProviderSnapshot,
 ): WebSearchProviderLike {
   const pools = poolStore ?? createPoolStore(resolveKeys);
   const routingState: SearchRoutingState = { nextRoundRobinIndex: 0 };
   const cache = new SearchCache();
+
+  /** Adapter for one source id, preferring the live snapshot. */
+  const adapterFor = (sourceId: string, snapshot?: ProviderSnapshot): ProviderAdapterLike | undefined => {
+    if (snapshot) return snapshot.get(sourceId)?.adapter as ProviderAdapterLike | undefined;
+    return adapterRegistry[sourceId];
+  };
+
+  /** Whether one source can run without a credential. */
+  const keylessOf = (sourceId: string, adapter: ProviderAdapterLike, snapshot?: ProviderSnapshot): boolean => {
+    const entry = snapshot?.get(sourceId);
+    if (entry) return entry.keyless;
+    return isKeylessSelfHosted(adapter);
+  };
 
   return {
     id: PROVIDER_ID,
@@ -166,6 +197,7 @@ export function createSearchProvider(
     available() {
       const cfg = resolveConfig();
       if (!cfg.enabled) return false;
+      const snapshot = resolveSnapshot?.();
       const baseChain = fallbackChain({
         defaultProvider: cfg.defaultProvider,
         fallbackOrder: cfg.fallbackOrder,
@@ -176,14 +208,18 @@ export function createSearchProvider(
       );
       return chain.some((name) => {
         if (cfg.enabledProviders[name] === false) return false;
-        const adapter = adapterRegistry[name];
-        return adapter !== undefined && (cfg.searchAccessMode !== "free-only" || searchAuthentication(adapter) !== "required");
+        const entry = snapshot?.get(name);
+        if (entry?.config && entry.config.enabled === false) return false;
+        const adapter = adapterFor(name, snapshot);
+        return adapter !== undefined && (cfg.searchAccessMode !== "free-only" || (entry && !entry.builtIn ? (entry.keyless ? "none" : "required") : searchAuthentication(adapter)) !== "required");
       });
     },
 
     async search(request: { query: string; maxResults?: number }, signal?: AbortSignal) {
       const cfg = resolveConfig();
       if (!cfg.enabled) throw new WebToolsWebError("web search is disabled");
+      // ONE snapshot for the whole request (see the doc comment above).
+      const snapshot = resolveSnapshot?.();
       // maxResults is owned by the DSH tool layer (it always passes its own);
       // the plugin does not override it.
       const maxResults = request.maxResults;
@@ -204,12 +240,24 @@ export function createSearchProvider(
         /(?:^|\s)after:/i.test(request.query) ? " " : ` after:${searchHints.freshness?.after ?? ""}`,
       ).trim();
 
-      const scheduled = searchAttempts(chain, cfg.searchAccessMode ?? "api-first", adapterRegistry);
+      const availableAdapters = Object.fromEntries(chain.flatMap(name => {
+        const adapter = adapterFor(name, snapshot);
+        if (!adapter) { attempts.push({ provider: name, outcome: "skipped-no-adapter" }); return []; }
+        const catalog = snapshot?.get(name);
+        const authentication = catalog && !catalog.builtIn ? (catalog.keyless ? "none" : "required") : searchAuthentication(adapter);
+        return [[name, { ...adapter, authentication }]];
+      }));
+      const scheduled = searchAttempts(chain.filter(name => availableAdapters[name] !== undefined), cfg.searchAccessMode ?? "api-first", availableAdapters);
       for (const attempt of scheduled) {
         const providerName = attempt.provider;
         if (signal?.aborted) throw toWebError(providerErrorOf("aborted", "web search aborted by caller"));
         if (cfg.enabledProviders[providerName] === false) continue;
-        const adapter = adapterRegistry[providerName];
+        const entryInfo: CatalogEntry | undefined = snapshot?.get(providerName);
+        if (entryInfo?.config && entryInfo.config.enabled === false) {
+          attempts.push({ provider: providerName, outcome: "skipped-disabled" });
+          continue;
+        }
+        const adapter = adapterFor(providerName, snapshot);
         if (!adapter) {
           attempts.push({ provider: providerName, outcome: "skipped-no-adapter" });
           continue;
@@ -218,8 +266,13 @@ export function createSearchProvider(
           attempts.push({ provider: providerName, outcome: "skipped-no-base-url" });
           continue;
         }
-        const entries = attempt.anonymous ? [new PoolEntry("", 0)] : await pools.poolOf(providerName);
-        if (entries.length === 0) {
+        let entries = attempt.anonymous ? [new PoolEntry("", 0)] : await pools.poolOf(providerName);
+        const keyless = keylessOf(providerName, adapter, snapshot);
+        if (entries.length === 0 && keyless) {
+          // Keyless sources (self-hosted SearXNG, or a custom source with auth
+          // mode "none") execute with an empty key.
+          entries = [new PoolEntry("", 0)];
+        } else if (entries.length === 0) {
           attempts.push({ provider: providerName, outcome: "skipped-no-keys" });
           continue;
         }
@@ -246,13 +299,18 @@ export function createSearchProvider(
         // provider. Non-auth failures (429/5xx/network/timeout) do not rotate
         // keys — they fall through to the next provider directly.
         let providerLevelDecision: "next-provider" | "break" | "terminal" | null = null;
+        // Base URL from the request snapshot, so an override edit mid-request
+        // cannot make one attempt dial a different host than another.
+        const searchBaseUrl = entryInfo?.builtIn
+          ? entryInfo.endpoint?.effectiveBaseUrl
+          : cfg.providerBaseUrls[providerName];
         while (usable.length > 0) {
           const index = selectIndex(entries);
           const entry = entries[index];
           if (entry) reserveKey(entries, index);
           const started = Date.now();
           const providerOptions = cfg.providerOptions?.[providerName as keyof StoredProviderOptions];
-          const cacheKey = searchCacheKey({ providerName, key: entry?.key, request, config: cfg, hints: searchHints });
+          const cacheKey = searchCacheKey({ providerName, key: entry?.key, request, config: cfg, source: entryInfo?.config, endpoint: searchBaseUrl, hints: searchHints });
           try {
             const cached = cache.get(cacheKey, cfg.cacheTtlSeconds ?? 0);
             if (cached) {
@@ -261,7 +319,7 @@ export function createSearchProvider(
             }
             const outcome = await runWithTimeout(
               (s) =>
-                adapter.search(providerQuery, maxResults, entry?.key ?? "", cfg.providerBaseUrls[providerName], {
+                adapter.search(providerQuery, maxResults, entry?.key ?? "", searchBaseUrl, {
                   signal: s,
                   options: providerOptions,
                   hints: searchHints,
@@ -356,6 +414,7 @@ export function createFetchProvider(
   poolStore?: PoolStore,
   healthStore?: ProviderHealthStore,
   genericFetcher: typeof fetchGenericWebPage = fetchGenericWebPage,
+  resolveSnapshot?: () => ProviderSnapshot,
 ): WebFetchProviderLike {
   const pools = poolStore ?? createPoolStore(resolveKeys);
 
@@ -369,6 +428,7 @@ export function createFetchProvider(
     async fetch(request: { url: string }, signal?: AbortSignal) {
       const cfg = resolveConfig();
       if (!cfg.enabled) throw new WebToolsWebError("web fetch is disabled");
+      const snapshot = resolveSnapshot?.();
       const chain = fallbackChain({
         defaultProvider: cfg.defaultProvider,
         fallbackOrder: cfg.fallbackOrder,
@@ -380,7 +440,12 @@ export function createFetchProvider(
       // 1. Attempt native fetch from configured, enabled, fetch-capable providers
       for (const providerName of chain) {
         if (cfg.enabledProviders[providerName] === false) continue;
-        const adapter = adapterRegistry[providerName];
+        const nativeEntry = snapshot?.get(providerName);
+        if (nativeEntry?.config && nativeEntry.config.enabled === false) continue;
+        const adapter = (nativeEntry?.adapter as ProviderAdapterLike | undefined) ?? adapterRegistry[providerName];
+        // Custom sources are search-only (fetchCapable=false), so they are
+        // skipped here by construction and page fetching keeps using the
+        // built-in generic fetcher below.
         if (!adapter || !adapter.fetchCapable || cfg.searchAccessMode === "free-only") continue; // not a native fetch backend, skip
         const entries = await pools.poolOf(providerName);
         if (entries.length === 0) continue; // no credentials for this backend
@@ -392,10 +457,14 @@ export function createFetchProvider(
         const entry = entries[index];
         if (entry) reserveKey(entries, index);
         const providerOptions = cfg.providerOptions?.[providerName as keyof StoredProviderOptions];
+        // Native fetch endpoints stay on the official host: the base-URL
+        // override applies to SEARCH only (see endpoints.ts), because a gateway
+        // that proxies search may not proxy extraction.
+        const fetchBaseUrl = cfg.providerBaseUrls[providerName];
         try {
           const { text } = await runWithTimeout(
             (sig) =>
-              adapter.fetch(request.url, entry?.key ?? "", cfg.providerBaseUrls[providerName], {
+              adapter.fetch(request.url, entry?.key ?? "", fetchBaseUrl, {
                 signal: sig,
                 options: providerOptions,
               }),

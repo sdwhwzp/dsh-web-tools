@@ -32,7 +32,6 @@ function fixture() {
       },
     },
     webServer: { register: () => () => {} },
-    webRuntime: { trustedHosts: ["127.0.0.1"] },
     credentials: {
       resolve: async () => undefined, set: async () => {}, unset: async () => {}, describe: async () => ({}),
     },

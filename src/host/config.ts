@@ -15,6 +15,9 @@ import type { StoredProviderOptions } from "../shared/provider-options.ts";
 import type { SearchRoutingPolicy } from "../shared/api-types.ts";
 import type { SearchAccessMode } from "../shared/search-policy.ts";
 import { DEFAULT_BROWSER_SETTINGS, type BrowserSettings } from "./browser/remote-login.ts";
+import type { CustomProviderConfig } from "../shared/custom-provider-types.ts";
+import type { OutboundAuthorization } from "./provider-transport.ts";
+import { loadCustomProviders } from "./custom-provider-schema.ts";
 
 /** Persistent search routing policy id (shared with the client card). */
 export type ToolSearchRoutingPolicy = SearchRoutingPolicy;
@@ -59,6 +62,16 @@ export const DEFAULT_SETTINGS = {
   // search query. "ordered" = always from the first available; "round-robin"
   // and "random" rotate the start offset (see routing-policy.ts).
   searchRoutingPolicy: "ordered" as ToolSearchRoutingPolicy,
+  // Operator-defined search sources (Issue #9). Kept in their OWN array rather
+  // than merged into providerBaseUrls/providerEnabled: a merge would force a
+  // migration of every existing profile for no benefit, and custom sources
+  // carry structure (protocol, auth, mapping) the flat maps cannot express.
+  customProviders: [] as CustomProviderConfig[],
+  /** Operator-granted outbound destinations for internal gateways / private IPs. */
+  outboundAuthorizations: [
+    { host: "127.0.0.1", port: 8080, allowPrivate: true, allowHttp: true, note: "SearXNG default instance" },
+    { host: "localhost", port: 8080, allowPrivate: true, allowHttp: true, note: "SearXNG default instance" },
+  ] as OutboundAuthorization[],
 };
 
 /** Resolved settings shape (explicit interface — portable in emitted d.ts). */
@@ -79,6 +92,10 @@ export interface WebToolsSettings extends BrowserSettings {
   braveQuotaCache: Record<string, QuotaSnapshot>;
   /** Search routing policy (see shared api-types). */
   searchRoutingPolicy: ToolSearchRoutingPolicy;
+  /** Operator-defined custom search sources (Issue #9). */
+  customProviders: CustomProviderConfig[];
+  /** Operator-granted outbound destinations for internal gateways / private IPs. */
+  outboundAuthorizations?: OutboundAuthorization[];
 }
 
 /** The schema object for settings registration (official z<T> annotation). */
@@ -106,6 +123,10 @@ export const Config: z<WebToolsSettings> = z.object({
   providerOptions: z.dict(z.any()),
   braveQuotaCache: z.dict(z.any()),
   searchRoutingPolicy: z.union([z.const("ordered"), z.const("round-robin"), z.const("random")]),
+  // Validated structurally on load; a bad entry is dropped, never thrown, so a
+  // hand-edited profile cannot make the plugin fail to register.
+  customProviders: z.array(z.any()),
+  outboundAuthorizations: z.array(z.any()),
 });
 // Loader exposes live getter nodes instead of restarting the plugin on edits.
 Config.meta.volatile = true;
@@ -122,9 +143,13 @@ function unwrapConfig(value: unknown): unknown {
 function resolveSettings(value: unknown): WebToolsSettings {
   const fields = unwrapConfig(value);
   // The Loader or settings schema validates values; undefined fields keep defaults.
-  return { ...DEFAULT_SETTINGS, ...Object.fromEntries(
+  const resolved = { ...DEFAULT_SETTINGS, ...Object.fromEntries(
     Object.entries(fields ?? {}).filter(([, field]) => field !== undefined),
   ) };
+  return { ...resolved, providerBaseUrls: sanitizeBaseUrlOverrides(resolved.providerBaseUrls),
+    customProviders: loadCustomProviders(resolved.customProviders),
+    outboundAuthorizations: Array.isArray(resolved.outboundAuthorizations) ? resolved.outboundAuthorizations : [],
+  };
 }
 
 /** A settings-scope handle: current value + write path. */
@@ -139,6 +164,32 @@ export interface ConfigHandle {
    * resolve the initial Loader configuration and defaults.
    */
   onMounted: (cb: () => void) => void;
+}
+
+/**
+ * Keep only usable base-URL overrides.
+ *
+ * A malformed override must never reach an adapter: an entry that is not an
+ * absolute http(s) URL is dropped (which restores the official endpoint) rather
+ * than being passed down and failing at request time.
+ */
+export function sanitizeBaseUrlOverrides(value: unknown): Record<string, string> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const out: Record<string, string> = {};
+  for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof raw !== "string") continue;
+    const trimmed = raw.trim();
+    if (trimmed === "") continue; // an empty override means "restore default"
+    try {
+      const parsed = new URL(trimmed);
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") continue;
+      if (parsed.username || parsed.password) continue;
+      out[key] = parsed.href.replace(/\/+$/, "");
+    } catch {
+      continue;
+    }
+  }
+  return out;
 }
 
 /**
@@ -185,7 +236,18 @@ export function installConfig(ctx: WebToolsContext, initialConfig?: unknown): Co
     read: () => current(),
     write: async (patch) => {
       if (!scope) throw new Error("dsh-web-tools settings namespace is not mounted");
-      await scope.update(patch);
+      const normalized: Partial<WebToolsSettings> = { ...patch };
+      if (patch.providerBaseUrls !== undefined) {
+        normalized.providerBaseUrls = sanitizeBaseUrlOverrides(patch.providerBaseUrls);
+      }
+      if (patch.customProviders !== undefined) {
+        normalized.customProviders = loadCustomProviders(patch.customProviders);
+      }
+      if (patch.outboundAuthorizations !== undefined) {
+        normalized.outboundAuthorizations = Array.isArray(patch.outboundAuthorizations) ? patch.outboundAuthorizations : [];
+      }
+
+      await scope.update(normalized);
     },
     onMounted: (cb) => {
       if (mounted) cb();

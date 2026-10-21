@@ -11,10 +11,15 @@
  */
 import { providerError, classifyHttpStatus, resolveContext, parseRetryAfter, type ProviderAdapter } from "./types.ts";
 import { fetchWithProxy } from "../fetch-proxy.ts";
+import { endpointViewOf } from "../endpoints.ts";
 import type { ExaProviderOptions } from "../../shared/provider-options.ts";
 import type { SearchHints } from "../search-hints.ts";
 import { searchExaAnonymous } from "./free-search.ts";
 
+/** Official fallback. The search endpoint is overridable via providerBaseUrls;
+ *  `/contents` (web_fetch) stays pinned to the official host on purpose — a
+ *  gateway that proxies /search may not proxy extraction, and reusing the
+ *  override there would send the credential to an unverified endpoint. */
 const EXA_SEARCH_URL = "https://api.exa.ai/search";
 const EXA_CONTENTS_URL = "https://api.exa.ai/contents";
 
@@ -152,13 +157,14 @@ export const EXA_META = {
 export const ExaProvider: ProviderAdapter = {
   ...EXA_META,
 
-  async search(query, maxResults, apiKey, _baseUrl, contextOrSignal) {
+  async search(query, maxResults, apiKey, baseUrl, contextOrSignal) {
     const { signal, options, hints } = resolveContext<ExaProviderOptions>(contextOrSignal);
     const token = (apiKey ?? "").trim();
     const numResults = typeof maxResults === "number" && maxResults > 0 ? Math.min(maxResults, 25) : 10;
     if (!token) return searchExaAnonymous(query, numResults, signal);
     const body = buildExaSearchBody(query, numResults, options, hints);
-    const res = await fetchWithProxy(EXA_SEARCH_URL, {
+    const searchUrl = endpointViewOf("exa", { exa: baseUrl })?.url ?? EXA_SEARCH_URL;
+    const res = await fetchWithProxy(searchUrl, {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -166,7 +172,7 @@ export const ExaProvider: ProviderAdapter = {
       },
       body: JSON.stringify(body),
       signal,
-    });
+    }, { provider: "exa" });
     if (!res.ok) await throwExaError(res);
     const raw = await res.json();
     const results = Array.isArray(raw?.results) ? raw.results : [];
@@ -210,7 +216,7 @@ export const ExaProvider: ProviderAdapter = {
       },
       body: JSON.stringify(body),
       signal,
-    });
+    }, { provider: "exa" });
     if (!res.ok) await throwExaError(res);
     const data = await res.json();
     // Exa /contents returns per-URL statuses in data.statuses[] (HTTP 200 may still have a URL error).

@@ -4,6 +4,8 @@ Search guidance, required-search snapshots, and correction notices use the produ
 
 The Web client requires Harness 0.1.7-alpha.2 or later and uses its shared icon exports for search controls and settings.
 
+This fork also supports the Harness 0.2.2-alpha.2 SDK with Cordis 4.0.6-alpha.1 and retains authenticated, account-scoped search settings and browser controls.
+
 Harness 0.1.7+ and 0.2 persist search preferences on the plugin Loader row, including customized row IDs. Initial Loader config and volatile getters remain readable before settings mount; later reads follow the live form. Mount callbacks also run when registered after injection. Writes carry the current form revision, refuse a missing owner or form, and only take effect after persistence succeeds. Older hosts retain their namespace storage. The client uses modern icon exports without modifying the shared module table.
 
 <p align="center">

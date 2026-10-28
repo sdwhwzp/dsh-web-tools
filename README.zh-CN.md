@@ -1,5 +1,7 @@
 <div align="center">
 
+本 fork 同时支持 Harness 0.2.2-alpha.2 SDK 与 Cordis 4.0.6-alpha.1，保留搜索设置及浏览器操作的账号认证和隔离。
+
 搜索引导、强制联网快照及纠正通知使用消息来源 `plugin:dsh-web-tools`，与已迁移历史及会话 V4 格式一致。
 
 Web 客户端要求 Harness 0.1.7-alpha.2 或更新版本，搜索控件与设置页面使用宿主提供的共享图标。
